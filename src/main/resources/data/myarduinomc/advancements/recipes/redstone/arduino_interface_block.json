@@ -1,0 +1,30 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_redstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "item": "minecraft:redstone" }
+        ]
+      }
+    },
+    "has_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "myarduinomc:arduino_interface_block"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_redstone",
+      "has_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "myarduinomc:arduino_interface_block"
+    ]
+  }
+}
