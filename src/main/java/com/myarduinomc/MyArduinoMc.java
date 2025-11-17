@@ -1,6 +1,5 @@
 package com.myarduinomc;
 
-import com.myarduinomc.block.ModBlocks;
 import net.fabricmc.api.ModInitializer;
 
 import org.slf4j.Logger;
@@ -20,7 +19,6 @@ public class MyArduinoMc implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
-                LOGGER.info("Iniciando MyArduinoMc");
-                ModBlocks.register();
-}
+		LOGGER.info("Hello Fabric world!");
+	}
 }
