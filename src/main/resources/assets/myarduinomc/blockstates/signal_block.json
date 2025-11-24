@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "myarduinomc:block/signal_block"
+    }
+  }
+}
