@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "myarduinomc:block/signal_block"
+    "all": "myarduinomc:block/arduino_redstone_block"
   }
 }

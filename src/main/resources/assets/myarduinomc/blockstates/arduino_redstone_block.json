@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "myarduinomc:block/arduino_redstone_block"
+    }
+  }
+}

@@ -31,7 +31,6 @@ loom {
 			sourceSet sourceSets.client
 		}
 	}
-
 }
 
 fabricApi {
@@ -51,8 +50,6 @@ dependencies {
     // Librería para comunicación serial (Arduino)
     implementation "com.fazecast:jSerialComm:2.10.4"
     include "com.fazecast:jSerialComm:2.10.4"
-    // DevAuth: Para tener tu skin y cuenta real en el entorno de desarrollo
-    modRuntimeOnly "me.djtheredstoner:DevAuth-fabric:1.2.0"
 	
 }
 
