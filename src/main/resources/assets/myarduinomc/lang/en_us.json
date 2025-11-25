@@ -1,3 +1,4 @@
 {
-  "block.myarduinomc.arduino_redstone_block": "Arduino Redstone"
+  "block.myarduinomc.connector_block": "Serial Link",
+  "block.myarduinomc.io_block": "Serial Node (IO)"
 }

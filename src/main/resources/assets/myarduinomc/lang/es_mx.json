@@ -1,0 +1,4 @@
+{
+  "block.myarduinomc.connector_block": "Conector Serial",
+  "block.myarduinomc.io_block": "Nodo Serial (IO)"
+}

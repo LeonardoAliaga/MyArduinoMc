@@ -2,8 +2,6 @@ package com.myarduinomc.block;
 
 import com.myarduinomc.MyArduinoMc;
 import com.myarduinomc.block.entity.ArduinoIOBlockEntity;
-import com.myarduinomc.screen.IOScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -42,43 +40,44 @@ public class ArduinoIOBlock extends Block implements EntityBlock {
         return new ArduinoIOBlockEntity(pos, state);
     }
 
-    // --- TICKER (Importante para registrar el bloque) ---
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Solo tickeamos en el servidor para registrar la entidad
+        // Paréntesis en isClientSide()
         return level.isClientSide() ? null : (lvl, pos, st, te) -> {
             if (te instanceof ArduinoIOBlockEntity myTe) myTe.tick();
         };
     }
 
     @Override
-    public boolean isSignalSource(BlockState state) {
-        return true;
-    }
+    public boolean isSignalSource(BlockState state) { return true; }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         return state.getValue(LIT) ? 15 : 0;
     }
 
-    // Lógica OUTPUT (Minecraft -> Arduino)
-    @Override
+    // --- DETECCIÓN DE REDSTONE ---
+    // Quitamos @Override para evitar errores de firma
+    // Esta es la lógica que se ejecuta cuando cambia un vecino
     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         if (!level.isClientSide() && level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity entity) {
             if (entity.isOutputMode) {
                 boolean hasPower = level.hasNeighborSignal(pos);
-                if (hasPower && !state.getValue(LIT)) {
+                boolean isLit = state.getValue(LIT);
+
+                if (hasPower && !isLit) {
+                    MyArduinoMc.LOGGER.info("REDSTONE DETECTADA -> Enviando: " + entity.targetData);
                     MyArduinoMc.enviarArduino(entity.targetData);
                     level.setBlock(pos, state.setValue(LIT, true), 3);
-                } else if (!hasPower && state.getValue(LIT)) {
+                }
+                else if (!hasPower && isLit) {
                     level.setBlock(pos, state.setValue(LIT, false), 3);
                 }
             }
         }
     }
 
-    // Apagar el bloque INPUT automáticamente
     @Override
     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         if (state.getValue(LIT)) {
@@ -88,7 +87,6 @@ public class ArduinoIOBlock extends Block implements EntityBlock {
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        // La GUI la abre el Client, aquí solo devolvemos éxito
         return InteractionResult.SUCCESS;
     }
 }

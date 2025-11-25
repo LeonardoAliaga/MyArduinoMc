@@ -17,11 +17,16 @@ public class IOScreen extends Screen {
     private Button modeButton;
     private EditBox dataBox;
 
+    // Estilo Blanco
+    private final int COLOR_FONDO = 0xFFF5F5F5;
+    private final int COLOR_BORDE = 0xFF404040;
+    private final int COLOR_TEXTO = 0xFF000000;
+
     public IOScreen(BlockPos pos, boolean isOutput, String data) {
-        super(Component.literal("Configurar Bloque IO"));
+        super(Component.literal("Config IO"));
         this.pos = pos;
         this.isOutput = isOutput;
-        this.currentData = data;
+        this.currentData = data == null ? "" : data;
     }
 
     @Override
@@ -29,31 +34,48 @@ public class IOScreen extends Screen {
         int x = this.width / 2;
         int y = this.height / 2;
 
-        // Botón Modo
-        modeButton = Button.builder(Component.literal(isOutput ? "MODO: OUTPUT (Envía)" : "MODO: INPUT (Recibe)"), b -> {
-            isOutput = !isOutput;
-            b.setMessage(Component.literal(isOutput ? "MODO: OUTPUT (Envía)" : "MODO: INPUT (Recibe)"));
-        }).bounds(x - 100, y - 40, 200, 20).build();
+        // Botón Modo (Con color según estado)
+        modeButton = Button.builder(Component.literal(getModeText()), b -> {
+            this.isOutput = !this.isOutput;
+            b.setMessage(Component.literal(getModeText()));
+        }).bounds(x - 90, y - 25, 180, 20).build();
         this.addRenderableWidget(modeButton);
 
-        // Caja de Texto
-        dataBox = new EditBox(this.font, x - 100, y, 200, 20, Component.literal("Datos"));
-        dataBox.setValue(currentData);
-        dataBox.setMaxLength(32);
+        // Caja Texto
+        dataBox = new EditBox(this.font, x - 90, y + 15, 180, 20, Component.literal("Data"));
+        dataBox.setValue(this.currentData); // <--- CARGA EL DATO GUARDADO
+        dataBox.setMaxLength(50);
         this.addRenderableWidget(dataBox);
 
         // Botón Guardar
-        this.addRenderableWidget(Button.builder(Component.literal("GUARDAR"), b -> {
-            // Enviar paquete al servidor
+        this.addRenderableWidget(Button.builder(Component.literal("GUARDAR CAMBIOS"), b -> {
             ClientPlayNetworking.send(new MyArduinoMc.ConfigPayload(pos, isOutput, dataBox.getValue()));
             this.onClose();
-        }).bounds(x - 50, y + 40, 100, 20).build());
+        }).bounds(x - 60, y + 55, 120, 20).build());
+    }
+
+    private String getModeText() {
+        return this.isOutput ? "§cMODO: OUTPUT (Enviar)" : "§9MODO: INPUT (Recibir)";
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.renderTransparentBackground(guiGraphics);
+
+        int w = 220; int h = 150;
+        int x = this.width / 2 - w / 2;
+        int y = this.height / 2 - h / 2;
+
+        // Fondo y Bordes
+        guiGraphics.fill(x, y, x + w, y + h, COLOR_FONDO);
+        guiGraphics.fill(x, y, x + w, y + 1, COLOR_BORDE);
+        guiGraphics.fill(x, y + h - 1, x + w, y + h, COLOR_BORDE);
+        guiGraphics.fill(x, y, x + 1, y + h, COLOR_BORDE);
+        guiGraphics.fill(x + w - 1, y, x + w, y + h, COLOR_BORDE);
+
+        guiGraphics.drawCenteredString(this.font, "§lCONFIGURACIÓN NODO", this.width / 2, y + 10, COLOR_TEXTO);
+        guiGraphics.drawString(this.font, "Palabra Clave (Ej: CLAP):", x + 20, y + 70, 0xFF555555, false);
+
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-        guiGraphics.drawCenteredString(this.font, "Palabra Clave (ej: CLAP)", this.width / 2, this.height / 2 - 15, 0xAAAAAA);
     }
 }

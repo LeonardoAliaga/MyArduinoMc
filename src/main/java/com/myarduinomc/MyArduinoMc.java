@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder; // <--- IMPORTANTE
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -41,7 +41,6 @@ public class MyArduinoMc implements ModInitializer {
     public static SerialPort arduinoPort = null;
     public static final Set<ArduinoIOBlockEntity> activeIOBlocks = Collections.synchronizedSet(new HashSet<>());
 
-    // --- REGISTROS ---
     public static final ResourceLocation CONNECTOR_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_block");
     public static final ResourceKey<Block> CONNECTOR_KEY = ResourceKey.create(Registries.BLOCK, CONNECTOR_ID);
     public static final Block CONNECTOR_BLOCK = new ConnectorBlock(BlockBehaviour.Properties.of().mapColor(MapColor.STONE).strength(2.0f).setId(CONNECTOR_KEY));
@@ -54,14 +53,12 @@ public class MyArduinoMc implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        // Registrar Bloques e Items
         Registry.register(BuiltInRegistries.BLOCK, CONNECTOR_ID, CONNECTOR_BLOCK);
         Registry.register(BuiltInRegistries.ITEM, CONNECTOR_ID, new BlockItem(CONNECTOR_BLOCK, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, CONNECTOR_ID))));
 
         Registry.register(BuiltInRegistries.BLOCK, IO_ID, IO_BLOCK);
         Registry.register(BuiltInRegistries.ITEM, IO_ID, new BlockItem(IO_BLOCK, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, IO_ID))));
 
-        // CORRECCIÓN: Usamos FabricBlockEntityTypeBuilder para evitar errores de compilación
         IO_BLOCK_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, IO_ID,
                 FabricBlockEntityTypeBuilder.create(ArduinoIOBlockEntity::new, IO_BLOCK).build());
 
@@ -70,18 +67,19 @@ public class MyArduinoMc implements ModInitializer {
             c.accept(IO_BLOCK);
         });
 
-        // --- RED ---
         PayloadTypeRegistry.playC2S().register(ConfigPayload.TYPE, ConfigPayload.CODEC);
 
+        // RECIBIR DATOS DEL CLIENTE
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos) instanceof ArduinoIOBlockEntity entity) {
+                    LOGGER.info("GUARDANDO DATOS: Pos=" + payload.pos + " Output=" + payload.isOutput + " Data=" + payload.data);
                     entity.setConfig(payload.isOutput, payload.data);
                 }
             });
         });
 
-        // --- LOOP ARDUINO ---
+        // LOOP ARDUINO (INPUT)
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (arduinoPort != null && arduinoPort.isOpen() && arduinoPort.bytesAvailable() > 0) {
                 try {
@@ -89,10 +87,9 @@ public class MyArduinoMc implements ModInitializer {
                     arduinoPort.readBytes(buffer, buffer.length);
                     String mensaje = new String(buffer, StandardCharsets.UTF_8).trim();
                     if (!mensaje.isEmpty()) {
-                        LOGGER.info("Arduino: " + mensaje);
+                        LOGGER.info("[ARDUINO -> MC]: " + mensaje);
                         synchronized (activeIOBlocks) {
                             for (ArduinoIOBlockEntity entity : activeIOBlocks) {
-                                // Solo activamos si es INPUT y el mensaje coincide
                                 if (!entity.isOutputMode && entity.targetData.equals(mensaje)) {
                                     entity.triggerRedstone();
                                 }
@@ -104,9 +101,11 @@ public class MyArduinoMc implements ModInitializer {
         });
     }
 
+    // PAYLOAD (Paquete de red)
     public record ConfigPayload(BlockPos pos, boolean isOutput, String data) implements CustomPacketPayload {
         public static final Type<ConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "config_packet"));
 
+        // CODEC ROBUSTO
         public static final StreamCodec<RegistryFriendlyByteBuf, ConfigPayload> CODEC = StreamCodec.of(
                 (buf, val) -> {
                     buf.writeBlockPos(val.pos);
@@ -118,9 +117,37 @@ public class MyArduinoMc implements ModInitializer {
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
+    // FUNCION CONECTAR MEJORADA
+    public static String conectar(String puerto) {
+        if (arduinoPort != null && arduinoPort.isOpen()) return "§eYa conectado";
+        try {
+            SerialPort[] ports = SerialPort.getCommPorts();
+            if (ports.length == 0) return "§cNo hay puertos";
+
+            for (SerialPort p : ports) {
+                if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
+                    arduinoPort = p;
+                    arduinoPort.setBaudRate(9600);
+                    if (arduinoPort.openPort()) {
+                        arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+                        LOGGER.info("CONEXIÓN EXITOSA CON " + puerto);
+                        return "§aConectado a " + puerto;
+                    }
+                }
+            }
+            return "§cPuerto " + puerto + " no hallado";
+        } catch (Exception e) { return "§4Error: " + e.getMessage(); }
+    }
+
+    // FUNCION OUTPUT MEJORADA
     public static void enviarArduino(String msg) {
         if (arduinoPort != null && arduinoPort.isOpen()) {
-            try { arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1); } catch (Exception e) {}
+            try {
+                LOGGER.info("[MC -> ARDUINO]: " + msg);
+                arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1);
+            } catch (Exception e) { e.printStackTrace(); }
+        } else {
+            LOGGER.warn("Intento de enviar '" + msg + "' fallido: No hay conexión.");
         }
     }
 }
