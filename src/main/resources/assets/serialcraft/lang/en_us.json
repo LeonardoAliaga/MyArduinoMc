@@ -1,0 +1,4 @@
+{
+  "block.serialcraft.connector_block": "Serial Link",
+  "block.serialcraft.io_block": "Serial Node (IO)"
+}

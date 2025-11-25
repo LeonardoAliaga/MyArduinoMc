@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "myarduinomc",
+  "id": "serialcraft",
   "version": "${version}",
   "name": "SerialCraft",
   "description": "Conecta Arduino con Minecraft usando comunicación Serial.",
@@ -12,23 +12,23 @@
     "sources": "https://github.com/FabricMC/fabric-example-mod"
   },
   "license": "CC0-1.0",
-  "icon": "assets/myarduinomc/textures/block/arduino_redstone_block.png",
+  "icon": "assets/serialcraft/textures/block/arduino_redstone_block.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.myarduinomc.MyArduinoMc"
+      "com.serialcraft.SerialCraft"
     ],
     "client": [
-      "com.myarduinomc.MyArduinoMcClient"
+      "com.serialcraft.SerialCraftClient"
     ],
     "fabric-datagen": [
-      "com.myarduinomc.MyArduinoMcDataGenerator"
+      "com.serialcraft.SerialCraftDataGenerator"
     ]
   },
   "mixins": [
-    "myarduinomc.mixins.json",
+    "serialcraft.mixins.json",
     {
-      "config": "myarduinomc.client.mixins.json",
+      "config": "serialcraft.client.mixins.json",
       "environment": "client"
     }
   ],

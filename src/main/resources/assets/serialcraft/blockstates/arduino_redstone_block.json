@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "serialcraft:block/arduino_redstone_block"
+    }
+  }
+}
