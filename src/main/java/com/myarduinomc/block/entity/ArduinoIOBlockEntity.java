@@ -20,62 +20,45 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         super(MyArduinoMc.IO_BLOCK_ENTITY, pos, blockState);
     }
 
-    // --- GUARDADO UNIVERSAL (Atrapamos todo) ---
+    // --- MÉTODOS DE LECTURA/ESCRITURA ---
 
-    // Método real de guardado
     private void writeMyData(CompoundTag tag) {
         tag.putBoolean("isOutput", isOutputMode);
         tag.putString("targetData", targetData == null ? "" : targetData);
-        // MyArduinoMc.LOGGER.info("Guardando datos en " + worldPosition); // Log opcional
     }
 
-    // Variante 1: Con Provider (La moderna)
+    private void readMyData(CompoundTag tag) {
+        // CORRECCIÓN FINAL: Usamos .orElse() explícitamente
+        if (tag.contains("isOutput")) {
+            this.isOutputMode = tag.getBoolean("isOutput").orElse(false);
+        }
+        if (tag.contains("targetData")) {
+            this.targetData = tag.getString("targetData").orElse("");
+        }
+    }
+
+    // --- GUARDADO (Soporte Híbrido) ---
+
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         writeMyData(tag);
-        // No llamamos a super para evitar crash
     }
 
-    // Variante 2: Sin Provider (La antigua/fallback)
     protected void saveAdditional(CompoundTag tag) {
         writeMyData(tag);
     }
 
-    // --- CARGA UNIVERSAL ---
+    // --- CARGA (Soporte Híbrido) ---
 
-    // Método real de carga
-    private void readMyData(CompoundTag tag) {
-        try {
-            if (tag.contains("isOutput")) {
-                // Intentamos leer como boolean directo, si falla (Optional), usamos el catch
-                this.isOutputMode = tag.getBoolean("isOutput");
-            }
-            if (tag.contains("targetData")) {
-                this.targetData = tag.getString("targetData");
-            }
-        } catch (Exception e) {
-            // Si falla por ser Optional, probamos la lógica de 1.21.10
-            try {
-                // Truco sucio: Usamos reflexión o lógica manual si el método directo falla
-                // Pero para simplificar, asumimos que si falla el directo, reseteamos o intentamos otro
-                this.isOutputMode = false;
-                this.targetData = "";
-            } catch (Exception ignored) {}
-        }
+    public void load(CompoundTag tag) {
+        // No llamamos a super.load(tag) para evitar conflictos
+        readMyData(tag);
     }
 
-    // Variante 1: Carga Moderna
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         readMyData(tag);
     }
 
-    // Variante 2: Carga Antigua
-    public void load(CompoundTag tag) {
-        // En algunas versiones 'load' es el padre de todo.
-        // No llamamos a super.load(tag) si da error.
-        readMyData(tag);
-    }
-
-    // --- RED Y SYNC ---
+    // --- RED ---
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
