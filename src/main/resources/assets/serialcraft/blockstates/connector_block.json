@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "serialcraft:block/connector_block" }
+  }
+}

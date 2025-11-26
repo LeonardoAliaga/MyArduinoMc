@@ -1,0 +1,73 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "monitor": "serialcraft:block/monitor"
+  },
+  "elements": [
+    {
+      "name": "Base",
+      "from": [2, 0, 4],
+      "to":   [14, 2, 12],
+      "faces": {
+        "north": { "uv": [0, 8, 16, 16], "texture": "#monitor" },
+        "south": { "uv": [0, 8, 16, 16], "texture": "#monitor" },
+        "east":  { "uv": [0, 8, 16, 16], "texture": "#monitor" },
+        "west":  { "uv": [0, 8, 16, 16], "texture": "#monitor" },
+        "up":    { "uv": [0, 8, 16, 16], "texture": "#monitor" },
+        "down":  { "uv": [0, 8, 16, 16], "texture": "#monitor" }
+      }
+    },
+    {
+      "name": "Soporte",
+      "from": [6, 2, 7],
+      "to":   [10, 6, 9],
+      "faces": {
+        "north": { "uv": [0, 8, 8, 16], "texture": "#monitor" },
+        "south": { "uv": [0, 8, 8, 16], "texture": "#monitor" },
+        "east":  { "uv": [0, 8, 8, 16], "texture": "#monitor" },
+        "west":  { "uv": [0, 8, 8, 16], "texture": "#monitor" },
+        "up":    { "uv": [0, 8, 8, 16], "texture": "#monitor" },
+        "down":  { "uv": [0, 8, 8, 16], "texture": "#monitor" }
+      }
+    },
+    {
+      "name": "MarcoPantalla",
+      "from": [1, 6, 3],
+      "to":   [15, 15, 11],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 9], "texture": "#monitor" },
+        "south": { "uv": [0, 0, 16, 9], "texture": "#monitor" },
+        "east":  { "uv": [0, 0, 16, 9], "texture": "#monitor" },
+        "west":  { "uv": [0, 0, 16, 9], "texture": "#monitor" },
+        "up":    { "uv": [0, 0, 16, 9], "texture": "#monitor" },
+        "down":  { "uv": [0, 0, 16, 9], "texture": "#monitor" }
+      }
+    },
+    {
+      "name": "PantallaInterior",
+      "from": [2, 7, 3.5],
+      "to":   [14, 14, 10],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 7], "texture": "#monitor" },
+        "south": { "uv": [0, 0, 16, 7], "texture": "#monitor" },
+        "east":  { "uv": [0, 0, 16, 7], "texture": "#monitor" },
+        "west":  { "uv": [0, 0, 16, 7], "texture": "#monitor" },
+        "up":    { "uv": [0, 0, 16, 7], "texture": "#monitor" },
+        "down":  { "uv": [0, 0, 16, 7], "texture": "#monitor" }
+      }
+    },
+    {
+      "name": "Led",
+      "from": [8, 3, 11],
+      "to":   [9, 4, 12],
+      "faces": {
+        "north": { "uv": [15, 15, 16, 16], "texture": "#monitor" },
+        "south": { "uv": [15, 15, 16, 16], "texture": "#monitor" },
+        "east":  { "uv": [15, 15, 16, 16], "texture": "#monitor" },
+        "west":  { "uv": [15, 15, 16, 16], "texture": "#monitor" },
+        "up":    { "uv": [15, 15, 16, 16], "texture": "#monitor" },
+        "down":  { "uv": [15, 15, 16, 16], "texture": "#monitor" }
+      }
+    }
+  ]
+}
