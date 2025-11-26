@@ -41,7 +41,8 @@ public class SerialCraft implements ModInitializer {
     public static SerialPort arduinoPort = null;
     public static final Set<ArduinoIOBlockEntity> activeIOBlocks = Collections.synchronizedSet(new HashSet<>());
 
-    public static final ResourceLocation CONNECTOR_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_block");
+    public static final ResourceLocation CONNECTOR_ID =
+            ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_block");
     public static final ResourceKey<Block> CONNECTOR_KEY = ResourceKey.create(Registries.BLOCK, CONNECTOR_ID);
     public static final Block CONNECTOR_BLOCK = new ConnectorBlock(BlockBehaviour.Properties.of().mapColor(MapColor.STONE).strength(2.0f).setId(CONNECTOR_KEY));
 
