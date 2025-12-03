@@ -1,43 +1,48 @@
 package com.serialcraft;
 
-import com.serialcraft.block.entity.ArduinoIOBlockEntity;
 import com.serialcraft.screen.ConnectorScreen;
 import com.serialcraft.screen.IOScreen;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionResult;
+import net.minecraft.network.FriendlyByteBuf;
 
 public class SerialCraftClient implements ClientModInitializer {
+
     @Override
     public void onInitializeClient() {
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (!world.isClientSide()) {
-                return InteractionResult.PASS;
-            }
 
-            BlockPos pos = hitResult.getBlockPos();
+        // ============================================================
+        //  CLIENT PAYLOAD: Abrir pantalla de conector (Laptop)
+        // ============================================================
+        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.OPEN_CONNECTOR_SCREEN,
+                (client, handler, buf, responseSender) -> {
 
-            // --- CORRECCIÓN AQUÍ ---
-            // Bloque conector (Laptop)
-            if (world.getBlockState(pos).is(SerialCraft.CONNECTOR_BLOCK)) {
-                // Ahora pasamos 'pos' al constructor
-                Minecraft.getInstance().setScreen(new ConnectorScreen(pos));
-                return InteractionResult.SUCCESS;
-            }
+                    BlockPos pos = buf.readBlockPos(); // posición enviada por el servidor
 
-            // Bloque IO
-            if (world.getBlockState(pos).is(SerialCraft.IO_BLOCK)) {
-                if (world.getBlockEntity(pos) instanceof ArduinoIOBlockEntity entity) {
-                    Minecraft.getInstance().setScreen(
-                            new IOScreen(pos, entity.isOutputMode, entity.targetData)
-                    );
-                }
-                return InteractionResult.SUCCESS;
-            }
+                    client.execute(() -> {
+                        Minecraft.getInstance().setScreen(new ConnectorScreen(pos));
+                    });
+                });
 
-            return InteractionResult.PASS;
-        });
+        // ============================================================
+        //  CLIENT PAYLOAD: Abrir pantalla IO
+        // ============================================================
+        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.OPEN_IO_SCREEN,
+                (client, handler, buf, responseSender) -> {
+
+                    BlockPos pos = buf.readBlockPos();
+                    boolean isOutput = buf.readBoolean();
+                    int targetData = buf.readInt();
+
+                    client.execute(() -> {
+                        Minecraft.getInstance().setScreen(
+                                new IOScreen(pos, isOutput, targetData)
+                        );
+                    });
+                });
+
+        System.out.println("[SerialCraft] Client initialized!");
     }
 }
