@@ -1,4 +1,5 @@
 {
-  "block.serialcraft.connector_block": "Conector Serial",
+  "block.serialcraft.connector_block": "Laptop Serial",
+  "item.serialcraft.connector_block": "Laptop Serial",
   "block.serialcraft.io_block": "Nodo Serial (IO)"
 }

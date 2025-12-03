@@ -41,10 +41,18 @@ public class SerialCraft implements ModInitializer {
     public static SerialPort arduinoPort = null;
     public static final Set<ArduinoIOBlockEntity> activeIOBlocks = Collections.synchronizedSet(new HashSet<>());
 
-    public static final ResourceLocation CONNECTOR_ID =
-            ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_block");
+    // --- BLOQUES ---
+    public static final ResourceLocation CONNECTOR_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_block");
     public static final ResourceKey<Block> CONNECTOR_KEY = ResourceKey.create(Registries.BLOCK, CONNECTOR_ID);
-    public static final Block CONNECTOR_BLOCK = new ConnectorBlock(BlockBehaviour.Properties.of().mapColor(MapColor.STONE).strength(2.0f).setId(CONNECTOR_KEY));
+
+    // AGREGADO: .noOcclusion() para arreglar la transparencia visual (X-Ray)
+    public static final Block CONNECTOR_BLOCK = new ConnectorBlock(
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.STONE)
+                    .strength(2.0f)
+                    .noOcclusion()
+                    .setId(CONNECTOR_KEY)
+    );
 
     public static final ResourceLocation IO_ID = ResourceLocation.fromNamespaceAndPath(MOD_ID, "io_block");
     public static final ResourceKey<Block> IO_KEY = ResourceKey.create(Registries.BLOCK, IO_ID);
@@ -54,6 +62,7 @@ public class SerialCraft implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // Registro de Bloques e Items
         Registry.register(BuiltInRegistries.BLOCK, CONNECTOR_ID, CONNECTOR_BLOCK);
         Registry.register(BuiltInRegistries.ITEM, CONNECTOR_ID, new BlockItem(CONNECTOR_BLOCK, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, CONNECTOR_ID))));
 
@@ -63,14 +72,17 @@ public class SerialCraft implements ModInitializer {
         IO_BLOCK_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, IO_ID,
                 FabricBlockEntityTypeBuilder.create(ArduinoIOBlockEntity::new, IO_BLOCK).build());
 
+        // Pestaña Creativa
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.REDSTONE_BLOCKS).register(c -> {
             c.accept(CONNECTOR_BLOCK);
             c.accept(IO_BLOCK);
         });
 
+        // --- NETWORKING (Paquetes) ---
         PayloadTypeRegistry.playC2S().register(ConfigPayload.TYPE, ConfigPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ConnectorPayload.TYPE, ConnectorPayload.CODEC);
 
-        // RECIBIR DATOS DEL CLIENTE
+        // 1. Recibir configuración del IO Block
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos) instanceof ArduinoIOBlockEntity entity) {
@@ -80,7 +92,22 @@ public class SerialCraft implements ModInitializer {
             });
         });
 
-        // LOOP ARDUINO (INPUT)
+        // 2. RECIBIR ESTADO DE CONEXIÓN (ENCENDER/APAGAR LED) [NUEVO]
+        ServerPlayNetworking.registerGlobalReceiver(ConnectorPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                var level = context.player().level();
+                var state = level.getBlockState(payload.pos);
+
+                // Verificamos que el bloque en esa posición sea realmente nuestra laptop
+                if (state.is(CONNECTOR_BLOCK)) {
+                    // Actualizamos la propiedad LIT (true o false)
+                    level.setBlock(payload.pos, state.setValue(ConnectorBlock.LIT, payload.connected), 3);
+                    LOGGER.info("Laptop en " + payload.pos + " cambio estado a: " + payload.connected);
+                }
+            });
+        });
+
+        // --- LOOP ARDUINO (Lectura serial) ---
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (arduinoPort != null && arduinoPort.isOpen() && arduinoPort.bytesAvailable() > 0) {
                 try {
@@ -102,23 +129,29 @@ public class SerialCraft implements ModInitializer {
         });
     }
 
-    // PAYLOAD (Paquete de red)
+    // --- PAYLOADS (Definición de paquetes) ---
+
+    // Paquete para el IO Block
     public record ConfigPayload(BlockPos pos, boolean isOutput, String data) implements CustomPacketPayload {
         public static final Type<ConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "config_packet"));
-
-        // CODEC ROBUSTO
         public static final StreamCodec<RegistryFriendlyByteBuf, ConfigPayload> CODEC = StreamCodec.of(
-                (buf, val) -> {
-                    buf.writeBlockPos(val.pos);
-                    buf.writeBoolean(val.isOutput);
-                    buf.writeUtf(val.data);
-                },
+                (buf, val) -> { buf.writeBlockPos(val.pos); buf.writeBoolean(val.isOutput); buf.writeUtf(val.data); },
                 buf -> new ConfigPayload(buf.readBlockPos(), buf.readBoolean(), buf.readUtf())
         );
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
-    // FUNCION CONECTAR MEJORADA
+    // NUEVO: Paquete para el Connector Block (Laptop)
+    public record ConnectorPayload(BlockPos pos, boolean connected) implements CustomPacketPayload {
+        public static final Type<ConnectorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_packet"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ConnectorPayload> CODEC = StreamCodec.of(
+                (buf, val) -> { buf.writeBlockPos(val.pos); buf.writeBoolean(val.connected); },
+                buf -> new ConnectorPayload(buf.readBlockPos(), buf.readBoolean())
+        );
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    // --- FUNCIONES SERIAL ---
     public static String conectar(String puerto) {
         if (arduinoPort != null && arduinoPort.isOpen()) return "§eYa conectado";
         try {
@@ -140,7 +173,6 @@ public class SerialCraft implements ModInitializer {
         } catch (Exception e) { return "§4Error: " + e.getMessage(); }
     }
 
-    // FUNCION OUTPUT MEJORADA
     public static void enviarArduino(String msg) {
         if (arduinoPort != null && arduinoPort.isOpen()) {
             try {

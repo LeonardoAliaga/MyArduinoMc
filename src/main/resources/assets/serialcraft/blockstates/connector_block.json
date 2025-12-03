@@ -1,8 +1,15 @@
 {
   "variants": {
-    "facing=north": { "model": "serialcraft:block/connector_block" },
-    "facing=south": { "model": "serialcraft:block/connector_block", "y": 180 },
-    "facing=west":  { "model": "serialcraft:block/connector_block", "y": 270 },
-    "facing=east":  { "model": "serialcraft:block/connector_block", "y": 90 }
+    "facing=north,lit=false": { "model": "serialcraft:block/connector_block" },
+    "facing=north,lit=true":  { "model": "serialcraft:block/connector_block_on" },
+
+    "facing=east,lit=false":  { "model": "serialcraft:block/connector_block", "y": 90 },
+    "facing=east,lit=true":   { "model": "serialcraft:block/connector_block_on", "y": 90 },
+
+    "facing=south,lit=false": { "model": "serialcraft:block/connector_block", "y": 180 },
+    "facing=south,lit=true":  { "model": "serialcraft:block/connector_block_on", "y": 180 },
+
+    "facing=west,lit=false":  { "model": "serialcraft:block/connector_block", "y": 270 },
+    "facing=west,lit=true":   { "model": "serialcraft:block/connector_block_on", "y": 270 }
   }
 }

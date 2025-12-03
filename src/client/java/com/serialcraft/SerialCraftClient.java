@@ -19,9 +19,11 @@ public class SerialCraftClient implements ClientModInitializer {
 
             BlockPos pos = hitResult.getBlockPos();
 
-            // Bloque conector
+            // --- CORRECCIÓN AQUÍ ---
+            // Bloque conector (Laptop)
             if (world.getBlockState(pos).is(SerialCraft.CONNECTOR_BLOCK)) {
-                Minecraft.getInstance().setScreen(new ConnectorScreen());
+                // Ahora pasamos 'pos' al constructor
+                Minecraft.getInstance().setScreen(new ConnectorScreen(pos));
                 return InteractionResult.SUCCESS;
             }
 

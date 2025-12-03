@@ -9,7 +9,7 @@
     "2": "serialcraft:block/gris-oscuro",
     "3": "serialcraft:block/373737",
     "4": "serialcraft:block/serialcraft",
-    "9": "serialcraft:block/off",
+    "9": "serialcraft:block/on",
     "particle": "serialcraft:block/gris"
   },
   "elements": [

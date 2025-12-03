@@ -1,10 +1,12 @@
 package com.serialcraft.screen;
 
 import com.serialcraft.SerialCraft;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
 public class ConnectorScreen extends Screen {
@@ -12,8 +14,12 @@ public class ConnectorScreen extends Screen {
     private String status = "§7Estado: Verificando...";
     private static final int COLOR_FONDO = 0xFFF5F5F5;
 
-    public ConnectorScreen() {
+    // Guardamos la posición del bloque para saber cuál encender
+    private final BlockPos pos;
+
+    public ConnectorScreen(BlockPos pos) {
         super(Component.literal("Conector"));
+        this.pos = pos;
     }
 
     @Override
@@ -37,26 +43,38 @@ public class ConnectorScreen extends Screen {
         );
         this.addRenderableWidget(this.portBox);
 
-        // Botón CONECTAR
+        // --- Botón CONECTAR ---
         this.addRenderableWidget(Button.builder(Component.literal("CONECTAR"), b -> {
             status = "§eConectando...";
             String res = SerialCraft.conectar(portBox.getValue().trim());
             status = res;
+
+            // Si la conexión fue exitosa...
+            if (res.contains("Conectado") || res.contains("Ya conectado")) {
+                // Enviamos paquete al servidor: "¡Enciende el bloque en esta posición!"
+                ClientPlayNetworking.send(new SerialCraft.ConnectorPayload(this.pos, true));
+            }
+
         }).bounds(centerX - 65, centerY + 5, 60, 20).build());
 
-        // Botón CERRAR
+        // --- Botón CERRAR / DESCONECTAR ---
         this.addRenderableWidget(Button.builder(Component.literal("CERRAR"), b -> {
+            // Desconectar Arduino
             if (SerialCraft.arduinoPort != null) {
                 SerialCraft.arduinoPort.closePort();
                 SerialCraft.arduinoPort = null;
             }
             status = "§cPuerto cerrado";
+
+            // Enviamos paquete al servidor: "¡Apaga el bloque en esta posición!"
+            ClientPlayNetworking.send(new SerialCraft.ConnectorPayload(this.pos, false));
+
         }).bounds(centerX + 5, centerY + 5, 60, 20).build());
     }
 
     @Override
     public void tick() {
-        // Refrescar estado si está conectado
+        // Refrescar estado visual si ya está conectado
         if (SerialCraft.arduinoPort != null && SerialCraft.arduinoPort.isOpen()) {
             String connected = "§2✓ Conectado a: " + SerialCraft.arduinoPort.getSystemPortName();
             if (!status.equals(connected)) {

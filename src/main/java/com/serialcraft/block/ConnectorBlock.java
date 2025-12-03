@@ -11,20 +11,21 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 
 public class ConnectorBlock extends HorizontalDirectionalBlock {
 
-    // 1. EN 1.21+ ES OBLIGATORIO DEFINIR EL CODEC
     public static final MapCodec<ConnectorBlock> CODEC = simpleCodec(ConnectorBlock::new);
+    public static final BooleanProperty LIT = BooleanProperty.create("lit");
 
     public ConnectorBlock(Properties properties) {
         super(properties);
-        // Estado por defecto: mirando al NORTE
-        this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(FACING, Direction.NORTH)
+                .setValue(LIT, false));
     }
 
-    // 2. EN 1.21+ ES OBLIGATORIO IMPLEMENTAR ESTE MÉTODO
     @Override
     protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
         return CODEC;
@@ -32,19 +33,19 @@ public class ConnectorBlock extends HorizontalDirectionalBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING);
+        builder.add(FACING, LIT);
     }
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        // Coloca el bloque mirando hacia el jugador (opuesto a la mirada del jugador)
         return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        // Tu lógica original para abrir la pantalla
-        // Nota: Asegúrate de que esto llame a tu código de cliente correctamente
+        // --- CORRECCIÓN ---
+        // Eliminamos la lógica de abrir pantalla aquí.
+        // SerialCraftClient.java se encarga de eso.
         return InteractionResult.SUCCESS;
     }
 }
