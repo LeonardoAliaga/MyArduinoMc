@@ -1,5 +1,8 @@
 {
   "variants": {
-    "": { "model": "serialcraft:block/connector_block" }
+    "facing=north": { "model": "serialcraft:block/connector_block" },
+    "facing=south": { "model": "serialcraft:block/connector_block", "y": 180 },
+    "facing=west":  { "model": "serialcraft:block/connector_block", "y": 270 },
+    "facing=east":  { "model": "serialcraft:block/connector_block", "y": 90 }
   }
 }

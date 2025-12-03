@@ -1,72 +1,34 @@
 {
   "parent": "minecraft:block/block",
   "textures": {
-    "monitor": "serialcraft:block/monitor"
+    "particle": "serialcraft:block/monitor",
+    "laptop_tex": "serialcraft:block/monitor"
   },
   "elements": [
     {
-      "name": "Base",
-      "from": [2, 0, 4],
-      "to":   [14, 2, 12],
+      "__comment": "Base de la Laptop (Teclado)",
+      "from": [3, 0, 3],
+      "to":   [13, 1, 11],
       "faces": {
-        "north": { "uv": [0, 8, 16, 16], "texture": "#monitor" },
-        "south": { "uv": [0, 8, 16, 16], "texture": "#monitor" },
-        "east":  { "uv": [0, 8, 16, 16], "texture": "#monitor" },
-        "west":  { "uv": [0, 8, 16, 16], "texture": "#monitor" },
-        "up":    { "uv": [0, 8, 16, 16], "texture": "#monitor" },
-        "down":  { "uv": [0, 8, 16, 16], "texture": "#monitor" }
+        "north": { "uv": [0, 13, 16, 14], "texture": "#laptop_tex" },
+        "south": { "uv": [0, 13, 16, 14], "texture": "#laptop_tex" },
+        "east":  { "uv": [0, 13, 16, 14], "texture": "#laptop_tex" },
+        "west":  { "uv": [0, 13, 16, 14], "texture": "#laptop_tex" },
+        "up":    { "uv": [0, 8, 16, 16], "texture": "#laptop_tex" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#laptop_tex" }
       }
     },
     {
-      "name": "Soporte",
-      "from": [6, 2, 7],
-      "to":   [10, 6, 9],
+      "__comment": "Pantalla (Tapa)",
+      "from": [3, 1, 11],
+      "to":   [13, 9, 12],
       "faces": {
-        "north": { "uv": [0, 8, 8, 16], "texture": "#monitor" },
-        "south": { "uv": [0, 8, 8, 16], "texture": "#monitor" },
-        "east":  { "uv": [0, 8, 8, 16], "texture": "#monitor" },
-        "west":  { "uv": [0, 8, 8, 16], "texture": "#monitor" },
-        "up":    { "uv": [0, 8, 8, 16], "texture": "#monitor" },
-        "down":  { "uv": [0, 8, 8, 16], "texture": "#monitor" }
-      }
-    },
-    {
-      "name": "MarcoPantalla",
-      "from": [1, 6, 3],
-      "to":   [15, 15, 11],
-      "faces": {
-        "north": { "uv": [0, 0, 16, 9], "texture": "#monitor" },
-        "south": { "uv": [0, 0, 16, 9], "texture": "#monitor" },
-        "east":  { "uv": [0, 0, 16, 9], "texture": "#monitor" },
-        "west":  { "uv": [0, 0, 16, 9], "texture": "#monitor" },
-        "up":    { "uv": [0, 0, 16, 9], "texture": "#monitor" },
-        "down":  { "uv": [0, 0, 16, 9], "texture": "#monitor" }
-      }
-    },
-    {
-      "name": "PantallaInterior",
-      "from": [2, 7, 3.5],
-      "to":   [14, 14, 10],
-      "faces": {
-        "north": { "uv": [0, 0, 16, 7], "texture": "#monitor" },
-        "south": { "uv": [0, 0, 16, 7], "texture": "#monitor" },
-        "east":  { "uv": [0, 0, 16, 7], "texture": "#monitor" },
-        "west":  { "uv": [0, 0, 16, 7], "texture": "#monitor" },
-        "up":    { "uv": [0, 0, 16, 7], "texture": "#monitor" },
-        "down":  { "uv": [0, 0, 16, 7], "texture": "#monitor" }
-      }
-    },
-    {
-      "name": "Led",
-      "from": [8, 3, 11],
-      "to":   [9, 4, 12],
-      "faces": {
-        "north": { "uv": [15, 15, 16, 16], "texture": "#monitor" },
-        "south": { "uv": [15, 15, 16, 16], "texture": "#monitor" },
-        "east":  { "uv": [15, 15, 16, 16], "texture": "#monitor" },
-        "west":  { "uv": [15, 15, 16, 16], "texture": "#monitor" },
-        "up":    { "uv": [15, 15, 16, 16], "texture": "#monitor" },
-        "down":  { "uv": [15, 15, 16, 16], "texture": "#monitor" }
+        "north": { "uv": [2, 2, 14, 10], "texture": "#laptop_tex" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#laptop_tex" },
+        "east":  { "uv": [11, 1, 12, 9], "texture": "#laptop_tex" },
+        "west":  { "uv": [11, 1, 12, 9], "texture": "#laptop_tex" },
+        "up":    { "uv": [3, 11, 13, 12], "texture": "#laptop_tex" },
+        "down":  { "uv": [3, 11, 13, 12], "texture": "#laptop_tex" }
       }
     }
   ]
