@@ -1,8 +1,6 @@
-package com.serialcraft.registry;
+package com.serialcraft.block;
 
 import com.serialcraft.SerialCraft;
-import com.serialcraft.block.ArduinoIOBlock;
-import com.serialcraft.block.ConnectorBlock;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -19,8 +17,11 @@ public class ModBlocks {
     private static Block register(String name,
                                   Function<BlockBehaviour.Properties, Block> blockFactory,
                                   BlockBehaviour.Properties settings) {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, name);
-        ResourceKey<Block> key = ResourceKey.create(Registries.BLOCK, id);
+
+        ResourceKey<Block> key = ResourceKey.create(
+                Registries.BLOCK,
+                ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, name)
+        );
 
         Block block = blockFactory.apply(settings.setId(key));
 
@@ -46,6 +47,6 @@ public class ModBlocks {
             BlockBehaviour.Properties.of()
     );
 
-    // Solo para forzar la carga de la clase desde el ModInitializer
+    // Llamado desde SerialCraft.onInitialize()
     public static void initialize() {}
 }

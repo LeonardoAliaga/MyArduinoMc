@@ -1,7 +1,7 @@
-package com.serialcraft.registry;
+package com.serialcraft.block.entity;
 
 import com.serialcraft.SerialCraft;
-import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import com.serialcraft.block.ModBlocks;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;

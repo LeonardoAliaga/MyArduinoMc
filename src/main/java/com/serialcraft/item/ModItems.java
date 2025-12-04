@@ -1,6 +1,7 @@
-package com.serialcraft.registry;
+package com.serialcraft.item;
 
 import com.serialcraft.SerialCraft;
+import com.serialcraft.block.ModBlocks;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -18,6 +19,7 @@ public class ModItems {
     private static Item register(String name,
                                  Function<Item.Properties, Item> itemFactory,
                                  Item.Properties settings) {
+
         ResourceKey<Item> itemKey = ResourceKey.create(
                 Registries.ITEM,
                 ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, name)
@@ -28,11 +30,10 @@ public class ModItems {
         return Registry.register(BuiltInRegistries.ITEM, itemKey, item);
     }
 
-    public static Item CONNECTOR_BLOCK_ITEM;
-    public static Item IO_BLOCK_ITEM;
+    public static final Item CONNECTOR_BLOCK_ITEM;
+    public static final Item IO_BLOCK_ITEM;
 
-    public static void initialize() {
-        // BlockItems
+    static {
         CONNECTOR_BLOCK_ITEM = register(
                 "connector_block",
                 props -> new BlockItem(ModBlocks.CONNECTOR_BLOCK, props),
@@ -44,8 +45,10 @@ public class ModItems {
                 props -> new BlockItem(ModBlocks.IO_BLOCK, props),
                 new Item.Properties()
         );
+    }
 
-        // Añadir a la pestaña creativa de Redstone
+    public static void initialize() {
+        // Añadir a la pestaña de redstone
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.REDSTONE_BLOCKS)
                 .register(entries -> {
                     entries.accept(CONNECTOR_BLOCK_ITEM);

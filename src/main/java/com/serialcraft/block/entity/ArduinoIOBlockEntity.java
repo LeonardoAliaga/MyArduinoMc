@@ -1,18 +1,16 @@
 package com.serialcraft.block.entity;
 
 import com.serialcraft.SerialCraft;
-import com.serialcraft.registry.ModBlockEntities;
-
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class ArduinoIOBlockEntity extends BlockEntity {
 
-    // Configuración del bloque IO
+    // true = salida (MC → Arduino) / false = entrada (Arduino → Redstone)
     public boolean isOutputMode = false;
     public String targetData = "";
 
@@ -21,44 +19,77 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     }
 
     // ---------------------------------------------------------------------
-    // INTERACCIÓN DEL JUGADOR (click derecho en el bloque)
+    // REGISTRO DEL BLOCK ENTITY EN EL MUNDO (1.21+)
     // ---------------------------------------------------------------------
-    public void onPlayerInteract(Player player) {
-        if (level == null || level.isClientSide()) return;
+    @Override
+    public void setLevel(Level level) {
+        super.setLevel(level);
 
-        player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("Configurar IO Block"), false
-        );
+        if (level != null && !level.isClientSide()) {
+            SerialCraft.activeIOBlocks.add(this);
+        }
+    }
 
-        // Aquí puedes abrir una pantalla o alternar valores
-        // Ejemplo:
-        this.isOutputMode = !this.isOutputMode;
-
-        player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("Modo: " + (isOutputMode ? "Output" : "Input")),
-                false
-        );
+    @Override
+    public void setRemoved() {
+        super.setRemoved();
+        SerialCraft.activeIOBlocks.remove(this);
     }
 
     // ---------------------------------------------------------------------
-    // TICK DEL SERVIDOR
+    // INTERACCIÓN DEL JUGADOR (llamado desde ArduinoIOBlock.useWithoutItem)
+    // ---------------------------------------------------------------------
+    public void onPlayerInteract(Player player) {
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+
+        // Por ahora alternamos el modo
+        isOutputMode = !isOutputMode;
+
+        player.displayClientMessage(
+                Component.literal("Modo IO: " + (isOutputMode
+                        ? "Salida (MC → Arduino)"
+                        : "Entrada (Arduino → Redstone)")),
+                false
+        );
+
+        setChanged();
+    }
+
+    // ---------------------------------------------------------------------
+    // TICK DEL SERVIDOR (usado en SerialCraft.activeIOBlocks loop)
     // ---------------------------------------------------------------------
     public void tickServer() {
-        if (level == null || level.isClientSide()) return;
+        if (this.level == null || this.level.isClientSide()) return;
 
-        if (isOutputMode) {
-            // Si el bloque es de salida, envía siempre datos al Arduino
+        if (isOutputMode && targetData != null && !targetData.isEmpty()) {
             SerialCraft.enviarArduino(targetData);
         }
     }
 
     // ---------------------------------------------------------------------
-    // Cambiar configuración desde un paquete
+    // DISPARAR SEÑAL DE REDSTONE (llamado desde SerialCraft al recibir mensaje)
     // ---------------------------------------------------------------------
-    public void setConfig(boolean isOutput, String data) {
-        this.isOutputMode = isOutput;
-        this.targetData = data;
+    public void triggerRedstone() {
+        if (level == null) return;
 
+        BlockPos pos = getBlockPos();
+        BlockState state = getBlockState();
+
+        // Notifica a los vecinos que algo cambió
+        level.updateNeighborsAt(pos, state.getBlock());
+
+        // Pulso corto de redstone
+        level.scheduleTick(pos, state.getBlock(), 1);
+    }
+
+    // ---------------------------------------------------------------------
+    // Configuración desde la pantalla IO (ConfigPayload)
+    // ---------------------------------------------------------------------
+    public void setConfig(boolean output, String data) {
+        this.isOutputMode = output;
+        this.targetData = (data == null) ? "" : data;
         setChanged();
     }
 }

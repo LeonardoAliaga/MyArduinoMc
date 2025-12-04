@@ -3,9 +3,9 @@ package com.serialcraft;
 import com.fazecast.jSerialComm.SerialPort;
 import com.serialcraft.block.ConnectorBlock;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
-import com.serialcraft.registry.ModBlockEntities;
-import com.serialcraft.registry.ModBlocks;
-import com.serialcraft.registry.ModItems;
+import com.serialcraft.block.entity.ModBlockEntities;
+import com.serialcraft.block.ModBlocks;
+import com.serialcraft.item.ModItems;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;

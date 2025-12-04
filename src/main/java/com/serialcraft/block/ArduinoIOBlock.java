@@ -3,7 +3,7 @@ package com.serialcraft.block;
 import com.mojang.serialization.MapCodec;
 import com.serialcraft.SerialCraft;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
-import com.serialcraft.registry.ModBlockEntities;
+import com.serialcraft.block.entity.ModBlockEntities;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;

@@ -1,47 +1,55 @@
 package com.serialcraft;
 
+import com.serialcraft.block.ModBlocks;
+import com.serialcraft.block.entity.ArduinoIOBlockEntity;
 import com.serialcraft.screen.ConnectorScreen;
 import com.serialcraft.screen.IOScreen;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.phys.BlockHitResult;
 
 public class SerialCraftClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
 
-        // ============================================================
-        //  CLIENT PAYLOAD: Abrir pantalla de conector (Laptop)
-        // ============================================================
-        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.OPEN_CONNECTOR_SCREEN,
-                (client, handler, buf, responseSender) -> {
+        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 
-                    BlockPos pos = buf.readBlockPos(); // posición enviada por el servidor
+            if (!level.isClientSide() || hand != InteractionHand.MAIN_HAND) {
+                return InteractionResult.PASS;
+            }
 
-                    client.execute(() -> {
-                        Minecraft.getInstance().setScreen(new ConnectorScreen(pos));
-                    });
-                });
+            BlockPos pos = hit.getBlockPos();
+            var state = level.getBlockState(pos);
+            Minecraft mc = Minecraft.getInstance();
 
-        // ============================================================
-        //  CLIENT PAYLOAD: Abrir pantalla IO
-        // ============================================================
-        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.OPEN_IO_SCREEN,
-                (client, handler, buf, responseSender) -> {
+            // Bloque conector
+            if (state.is(ModBlocks.CONNECTOR_BLOCK)) {
+                mc.setScreen(new ConnectorScreen(pos));
+                return InteractionResult.SUCCESS;
+            }
 
-                    BlockPos pos = buf.readBlockPos();
-                    boolean isOutput = buf.readBoolean();
-                    int targetData = buf.readInt();
+            // Bloque IO "inteligente"
+            if (state.is(ModBlocks.IO_BLOCK)) {
+                boolean isOutput = false;
+                String data = "";
 
-                    client.execute(() -> {
-                        Minecraft.getInstance().setScreen(
-                                new IOScreen(pos, isOutput, targetData)
-                        );
-                    });
-                });
+                var be = level.getBlockEntity(pos);
+                if (be instanceof ArduinoIOBlockEntity io) {
+                    isOutput = io.isOutputMode;
+                    data = io.targetData;
+                }
+
+                mc.setScreen(new IOScreen(pos, isOutput, data));
+                return InteractionResult.SUCCESS;
+            }
+
+            return InteractionResult.PASS;
+        });
 
         System.out.println("[SerialCraft] Client initialized!");
     }
