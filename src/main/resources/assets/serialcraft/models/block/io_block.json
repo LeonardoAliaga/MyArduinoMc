@@ -1,8 +1,7 @@
 {
 	"format_version": "1.21.6",
 	"credit": "Made with Blockbench",
-	"parent": "block/block",
-	"ambientocclusion": false,
+    "parent": "minecraft:block/block",
 	"texture_size": [64, 64],
 	"textures": {
 		"0": "serialcraft:block/placa-texture",

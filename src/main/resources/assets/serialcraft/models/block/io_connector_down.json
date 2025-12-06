@@ -1,0 +1,40 @@
+{
+  "format_version": "1.21.6",
+  "credit": "Made with Blockbench",
+  "parent": "block/block",
+  "textures": {
+    "0": "serialcraft:block/placa-texture",
+    "1": "serialcraft:block/placa-texture",
+    "particle": "serialcraft:block/placa-texture"
+  },
+  "elements": [
+    {
+      "name": "luz_d",
+      "from": [7, 3, 6],
+      "to": [9, 5, 8],
+      "rotation": {"angle": 0, "axis": "y", "origin": [7, 2, 6]},
+      "faces": {
+        "north": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"},
+        "east": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"},
+        "south": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"},
+        "west": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"},
+        "up": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"},
+        "down": {"uv": [0, 15.5, 0.5, 16], "texture": "#1"}
+      }
+    },
+    {
+      "name": "base_d",
+      "from": [7, 2, 6],
+      "to": [9, 3, 8],
+      "rotation": {"angle": 0, "axis": "y", "origin": [7, 2, 6]},
+      "faces": {
+        "north": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"},
+        "east": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"},
+        "south": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"},
+        "west": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"},
+        "up": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"},
+        "down": {"uv": [15.5, 15.25, 16, 16], "texture": "#0"}
+      }
+    }
+  ]
+}

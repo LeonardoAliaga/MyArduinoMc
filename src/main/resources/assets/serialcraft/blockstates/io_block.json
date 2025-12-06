@@ -1,0 +1,35 @@
+{
+  "multipart": [
+    { "apply": { "model": "serialcraft:block/io_plate_base" }},
+
+    { "when": { "north": "false" }, "apply": { "model": "serialcraft:block/io_connector_side", "uvlock": true } },
+    { "when": { "north": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_side_on", "uvlock": true } },
+    { "when": { "north": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "uvlock": true } },
+    { "when": { "north": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "uvlock": true } },
+
+    { "when": { "east": "false" }, "apply": { "model": "serialcraft:block/io_connector_side", "y": 90, "uvlock": true } },
+    { "when": { "east": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_side_on", "y": 90, "uvlock": true } },
+    { "when": { "east": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 90, "uvlock": true } },
+    { "when": { "east": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 90, "uvlock": true } },
+
+    { "when": { "south": "false" }, "apply": { "model": "serialcraft:block/io_connector_side", "y": 180, "uvlock": true } },
+    { "when": { "south": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_side_on", "y": 180, "uvlock": true } },
+    { "when": { "south": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 180, "uvlock": true } },
+    { "when": { "south": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 180, "uvlock": true } },
+
+    { "when": { "west": "false" }, "apply": { "model": "serialcraft:block/io_connector_side", "y": 270, "uvlock": true } },
+    { "when": { "west": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_side_on", "y": 270, "uvlock": true } },
+    { "when": { "west": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 270, "uvlock": true } },
+    { "when": { "west": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_side_off", "y": 270, "uvlock": true } },
+
+    { "when": { "up": "false" }, "apply": { "model": "serialcraft:block/io_connector_up" } },
+    { "when": { "up": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_up_on" } },
+    { "when": { "up": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_up_off" } },
+    { "when": { "up": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_up_off" } },
+
+    { "when": { "down": "false" }, "apply": { "model": "serialcraft:block/io_connector_down" } },
+    { "when": { "down": "true", "mode": "0" }, "apply": { "model": "serialcraft:block/io_connector_down_on" } },
+    { "when": { "down": "true", "mode": "1" }, "apply": { "model": "serialcraft:block/io_connector_down_off" } },
+    { "when": { "down": "true", "mode": "2" }, "apply": { "model": "serialcraft:block/io_connector_down_off" } }
+  ]
+}
