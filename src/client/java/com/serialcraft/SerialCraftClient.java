@@ -10,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.phys.BlockHitResult;
 
 public class SerialCraftClient implements ClientModInitializer {
 
@@ -27,24 +26,22 @@ public class SerialCraftClient implements ClientModInitializer {
             var state = level.getBlockState(pos);
             Minecraft mc = Minecraft.getInstance();
 
-            // Bloque conector
             if (state.is(ModBlocks.CONNECTOR_BLOCK)) {
                 mc.setScreen(new ConnectorScreen(pos));
                 return InteractionResult.SUCCESS;
             }
 
-            // Bloque IO "inteligente"
             if (state.is(ModBlocks.IO_BLOCK)) {
-                boolean isOutput = false;
+                int mode = 0;
                 String data = "";
 
                 var be = level.getBlockEntity(pos);
                 if (be instanceof ArduinoIOBlockEntity io) {
-                    isOutput = io.isOutputMode;
+                    mode = io.ioMode; // Leemos modo (int)
                     data = io.targetData;
                 }
 
-                mc.setScreen(new IOScreen(pos, isOutput, data));
+                mc.setScreen(new IOScreen(pos, mode, data));
                 return InteractionResult.SUCCESS;
             }
 
