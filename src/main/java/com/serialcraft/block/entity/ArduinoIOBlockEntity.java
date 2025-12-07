@@ -2,6 +2,7 @@ package com.serialcraft.block.entity;
 
 import com.serialcraft.SerialCraft;
 import com.serialcraft.block.ArduinoIOBlock;
+import com.serialcraft.block.IOSide;
 import com.serialcraft.block.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -15,22 +16,21 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.EnumSet;
 
 public class ArduinoIOBlockEntity extends BlockEntity {
 
     public int ioMode = 0;
     public String targetData = "";
-
-    public EnumSet<Direction> activeDirections = EnumSet.noneOf(Direction.class);
-    public EnumSet<Direction> passThroughDirections = EnumSet.noneOf(Direction.class);
-
     private boolean wasPowered = false;
+
+    // Temporizadores para efectos y señales
+    private int pulseTimer = 0; // Para apagar la señal redstone en Modo 1
+    private int blinkTimer = 0; // Para el efecto visual del LED
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
@@ -43,8 +43,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         output.putInt("ioMode", ioMode);
         output.putString("targetData", targetData != null ? targetData : "");
         output.putBoolean("wasPowered", wasPowered);
-        output.putInt("activeDirs", encodeDirections(activeDirections));
-        output.putInt("passDirs", encodeDirections(passThroughDirections));
     }
 
     @Override
@@ -53,17 +51,13 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.ioMode = input.getIntOr("ioMode", 0);
         this.targetData = input.getString("targetData").orElse("");
         this.wasPowered = input.getBooleanOr("wasPowered", false);
-        this.activeDirections = decodeDirections(input.getIntOr("activeDirs", 0));
-        this.passThroughDirections = decodeDirections(input.getIntOr("passDirs", 0));
     }
 
     @Override
-    public CompoundTag getUpdateTag(HolderLookup.Provider provider) {
+    public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         tag.putInt("ioMode", ioMode);
         tag.putString("targetData", targetData != null ? targetData : "");
-        tag.putInt("activeDirs", encodeDirections(activeDirections));
-        tag.putInt("passDirs", encodeDirections(passThroughDirections));
         return tag;
     }
 
@@ -73,125 +67,127 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    private int encodeDirections(EnumSet<Direction> dirs) {
-        int mask = 0;
-        for (Direction d : dirs) mask |= (1 << d.ordinal());
-        return mask;
-    }
-    private EnumSet<Direction> decodeDirections(int mask) {
-        EnumSet<Direction> dirs = EnumSet.noneOf(Direction.class);
-        for (Direction d : Direction.values()) {
-            if ((mask & (1 << d.ordinal())) != 0) dirs.add(d);
-        }
-        return dirs;
-    }
-
-    // --- INTERACCIÓN BOTONES (CORREGIDO: MUTUALMENTE EXCLUYENTE) ---
     public void onButtonInteract(Player player, Direction btn, boolean isShift) {
         if (level == null || level.isClientSide()) return;
 
         BlockState currentState = getBlockState();
-        BooleanProperty property = getPropertyForDirection(btn);
+        EnumProperty<IOSide> property = ArduinoIOBlock.getPropertyForDirection(btn);
+        IOSide currentSideState = currentState.getValue(property);
+        IOSide newState;
 
         if (isShift) {
-            // SHIFT CLICK: Configurar PUENTE
-            // 1. Eliminar de la lista "Normal" si existe (Exclusividad)
-            if (activeDirections.contains(btn)) {
-                activeDirections.remove(btn);
-            }
-
-            // 2. Toggle Puente
-            if (passThroughDirections.contains(btn)) {
-                passThroughDirections.remove(btn);
-                // Apagamos visualmente (ninguno está activo)
-                level.setBlockAndUpdate(worldPosition, currentState.setValue(property, false));
-                player.displayClientMessage(Component.literal("§6[IO] Puente " + btn.getName() + ": OFF"), true);
-            } else {
-                passThroughDirections.add(btn);
-                // Encendemos visualmente
-                level.setBlockAndUpdate(worldPosition, currentState.setValue(property, true));
-                player.displayClientMessage(Component.literal("§6[IO] Puente " + btn.getName() + ": ON"), true);
-            }
+            newState = (currentSideState == IOSide.OUTPUT) ? IOSide.NONE : IOSide.OUTPUT;
+            String msg = (newState == IOSide.OUTPUT) ? "§6[IO] Lado " + btn.getName() + ": SALIDA (Rojo)" : "§7[IO] Lado " + btn.getName() + ": Desconectado";
+            player.displayClientMessage(Component.literal(msg), true);
         } else {
-            // CLICK NORMAL: Configurar PRINCIPAL
-            // 1. Eliminar de la lista "Puente" si existe (Exclusividad)
-            if (passThroughDirections.contains(btn)) {
-                passThroughDirections.remove(btn);
-            }
-
-            // 2. Toggle Principal
-            if (activeDirections.contains(btn)) {
-                activeDirections.remove(btn);
-                // Apagamos visualmente
-                level.setBlockAndUpdate(worldPosition, currentState.setValue(property, false));
-                player.displayClientMessage(Component.literal("§b[IO] Puerto " + btn.getName() + ": OFF"), true);
-            } else {
-                activeDirections.add(btn);
-                // Encendemos visualmente
-                level.setBlockAndUpdate(worldPosition, currentState.setValue(property, true));
-                player.displayClientMessage(Component.literal("§b[IO] Puerto " + btn.getName() + ": ON"), true);
-            }
+            newState = (currentSideState == IOSide.INPUT) ? IOSide.NONE : IOSide.INPUT;
+            String msg = (newState == IOSide.INPUT) ? "§a[IO] Lado " + btn.getName() + ": ENTRADA (Verde)" : "§7[IO] Lado " + btn.getName() + ": Desconectado";
+            player.displayClientMessage(Component.literal(msg), true);
         }
-        setChanged();
+        level.setBlockAndUpdate(worldPosition, currentState.setValue(property, newState));
     }
 
-    private BooleanProperty getPropertyForDirection(Direction dir) {
-        return switch (dir) {
-            case NORTH -> ArduinoIOBlock.NORTH;
-            case SOUTH -> ArduinoIOBlock.SOUTH;
-            case EAST  -> ArduinoIOBlock.EAST;
-            case WEST  -> ArduinoIOBlock.WEST;
-            case UP    -> ArduinoIOBlock.UP;
-            case DOWN  -> ArduinoIOBlock.DOWN;
-        };
-    }
+    private boolean areInputsSatisfied() {
+        if (level == null) return false;
+        BlockState state = getBlockState();
+        int inputCount = 0;
+        boolean allInputsPowered = true;
 
-    // --- LÓGICA PRINCIPAL ---
+        for (Direction d : Direction.values()) {
+            EnumProperty<IOSide> prop = ArduinoIOBlock.getPropertyForDirection(d);
+            IOSide sideState = state.getValue(prop);
 
-    public void tickServer() {
-        if (this.level == null || this.level.isClientSide() || this.ioMode != 0) return;
-
-        boolean receivingValidSignal;
-        if (activeDirections.isEmpty()) {
-            receivingValidSignal = level.getBestNeighborSignal(worldPosition) > 0;
-        } else {
-            receivingValidSignal = true;
-            for (Direction d : activeDirections) {
+            if (sideState == IOSide.INPUT) {
+                inputCount++;
                 if (level.getSignal(worldPosition.relative(d), d) == 0) {
-                    receivingValidSignal = false;
+                    allInputsPowered = false;
                     break;
                 }
             }
         }
+        if (inputCount == 0) return false;
+        return allInputsPowered;
+    }
+
+    public void tickServer() {
+        if (this.level == null || this.level.isClientSide()) return;
 
         BlockState state = getBlockState();
-        boolean isPowered = state.getValue(ArduinoIOBlock.POWERED);
+        boolean changed = false;
 
-        if (receivingValidSignal != isPowered) {
-            level.setBlockAndUpdate(worldPosition, state.setValue(ArduinoIOBlock.POWERED, receivingValidSignal));
+        // 1. Gestionar Temporizadores
+        if (pulseTimer > 0) {
+            pulseTimer--;
+            if (pulseTimer == 0) {
+                state = state.setValue(ArduinoIOBlock.POWERED, false);
+                changed = true;
+            }
+        }
+        if (blinkTimer > 0) {
+            blinkTimer--;
+            if (blinkTimer == 0) {
+                state = state.setValue(ArduinoIOBlock.BLINKING, false);
+                changed = true;
+            }
+        }
+
+        // 2. Gestionar Estado ENABLED (Energía Física)
+        boolean isEnabled = areInputsSatisfied();
+        if (isEnabled != state.getValue(ArduinoIOBlock.ENABLED)) {
+            state = state.setValue(ArduinoIOBlock.ENABLED, isEnabled);
+            changed = true;
+        }
+
+        // 3. Aplicar Cambios si hubo alguno
+        if (changed) {
+            level.setBlockAndUpdate(worldPosition, state);
             level.updateNeighborsAt(worldPosition, state.getBlock());
         }
 
-        if (receivingValidSignal && !wasPowered) {
-            if (targetData != null && !targetData.isEmpty()) {
-                SerialCraft.enviarArduino(targetData);
+        // 4. Lógica de Envío a Arduino (Modo 0)
+        if (ioMode == 0) {
+            if (isEnabled && !wasPowered) {
+                if (targetData != null && !targetData.isEmpty()) {
+                    SerialCraft.enviarArduino(targetData);
+                }
             }
+            this.wasPowered = isEnabled;
         }
-        this.wasPowered = receivingValidSignal;
     }
 
+    // Recibe señal de Arduino
     public void triggerAction() {
         if (level == null || level.isClientSide()) return;
         BlockState state = getBlockState();
         if (!state.is(ModBlocks.IO_BLOCK)) return;
 
-        if (ioMode == 1) {
-            level.setBlock(worldPosition, state.setValue(ArduinoIOBlock.POWERED, true), 3);
-            level.updateNeighborsAt(worldPosition, state.getBlock());
-            level.scheduleTick(worldPosition, state.getBlock(), 20);
-        } else if (ioMode == 2) {
+        // Seguridad: Si no está habilitado físicamente, ignora la señal
+        if (!state.getValue(ArduinoIOBlock.ENABLED)) return;
+
+        boolean update = false;
+
+        // Activamos parpadeo visual (indica recepción de datos)
+        if (!state.getValue(ArduinoIOBlock.BLINKING)) {
+            state = state.setValue(ArduinoIOBlock.BLINKING, true);
+            blinkTimer = 5; // 5 ticks de parpadeo (0.25s)
+            update = true;
+        }
+
+        // Acciones de Redstone
+        if (ioMode == 1) { // Pulso
+            if (!state.getValue(ArduinoIOBlock.POWERED)) {
+                state = state.setValue(ArduinoIOBlock.POWERED, true);
+                pulseTimer = 20; // 1 segundo de pulso
+                update = true;
+            }
+        } else if (ioMode == 2) { // Interruptor
             boolean encendido = state.getValue(ArduinoIOBlock.POWERED);
-            level.setBlock(worldPosition, state.setValue(ArduinoIOBlock.POWERED, !encendido), 3);
+            state = state.setValue(ArduinoIOBlock.POWERED, !encendido);
+            update = true;
+        }
+
+        if (update) {
+            level.setBlockAndUpdate(worldPosition, state);
             level.updateNeighborsAt(worldPosition, state.getBlock());
         }
     }
@@ -200,18 +196,22 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.ioMode = mode;
         this.targetData = (data == null) ? "" : data;
         setChanged();
-        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+
+        // CORRECCIÓN VISUAL: Actualizar la propiedad MODE del bloque en el mundo
+        if (level != null) {
+            BlockState state = getBlockState();
+            if (state.getValue(ArduinoIOBlock.MODE) != mode) {
+                level.setBlockAndUpdate(worldPosition, state.setValue(ArduinoIOBlock.MODE, mode));
+            } else {
+                // Si el modo no cambió, solo notificamos cambio de datos
+                level.sendBlockUpdated(worldPosition, state, state, 3);
+            }
+        }
     }
 
     public void onPlayerInteract(Player player) {
         if (level == null || level.isClientSide()) return;
-        String modeName = switch (ioMode) {
-            case 0 -> "SALIDA (Envía)";
-            case 1 -> "ENTRADA (Pulso)";
-            case 2 -> "ENTRADA (Interruptor)";
-            default -> "DESC";
-        };
-        player.displayClientMessage(Component.literal("§e[IO] §fModo: §b" + modeName + " §f| Clave: §a" + targetData), true);
+        player.displayClientMessage(Component.literal("§e[IO] §fClave: §a" + targetData), true);
     }
 
     @Override public void setLevel(Level level) { super.setLevel(level); if (level != null && !level.isClientSide()) SerialCraft.activeIOBlocks.add(this); }

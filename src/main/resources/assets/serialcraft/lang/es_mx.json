@@ -1,5 +1,6 @@
 {
   "block.serialcraft.connector_block": "Laptop Serial",
   "item.serialcraft.connector_block": "Laptop Serial",
-  "block.serialcraft.io_block": "Nodo Serial (IO)"
+  "block.serialcraft.io_block": "Placa IO",
+  "item.serialcraft.io_block": "Placa IO"
 }

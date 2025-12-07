@@ -43,10 +43,10 @@ public class ModBlocks {
             props -> new ArduinoIOBlock(
                     props.mapColor(MapColor.METAL)
                             .strength(3.0f)
+                            .noOcclusion() // <--- ¡ESTO ARREGLA EL SUELO TRANSPARENTE!
             ),
             BlockBehaviour.Properties.of()
     );
 
-    // Llamado desde SerialCraft.onInitialize()
     public static void initialize() {}
 }

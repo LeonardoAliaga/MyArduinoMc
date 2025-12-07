@@ -1,7 +1,0 @@
-{
-  "parent": "serialcraft:block/io_connector_down",
-  "textures": {
-    "1": "serialcraft:block/off",
-    "particle": "serialcraft:block/off"
-  }
-}

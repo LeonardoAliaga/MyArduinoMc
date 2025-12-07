@@ -1,5 +1,6 @@
 package com.serialcraft;
 
+import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
 import com.serialcraft.screen.ConnectorScreen;
@@ -10,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.phys.Vec3; // Import necesario para la corrección
 
 public class SerialCraftClient implements ClientModInitializer {
 
@@ -32,6 +34,18 @@ public class SerialCraftClient implements ClientModInitializer {
             }
 
             if (state.is(ModBlocks.IO_BLOCK)) {
+                // --- CORRECCIÓN UI ---
+                // Verificamos si el jugador apuntó a un botón físico del bloque
+                if (state.getBlock() instanceof ArduinoIOBlock ioBlock) {
+                    Vec3 hitPos = hit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());
+                    // Si getHitButton devuelve una dirección, significa que tocó un botón.
+                    // Devolvemos PASS para no abrir la UI y dejar que el bloque procese el clic.
+                    if (ioBlock.getHitButton(hitPos) != null) {
+                        return InteractionResult.PASS;
+                    }
+                }
+                // ---------------------
+
                 int mode = 0;
                 String data = "";
 
