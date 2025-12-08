@@ -38,17 +38,11 @@ import org.jetbrains.annotations.Nullable;
 public class ArduinoIOBlock extends BaseEntityBlock {
 
     public static final MapCodec<ArduinoIOBlock> CODEC = simpleCodec(ArduinoIOBlock::new);
-
-    // POWERED: Señal lógica del Arduino (Disparo de salida / Parpadeo)
-    public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
-    // ENABLED: Energía física de inputs (Condición de seguridad / Puente activo)
-    public static final BooleanProperty ENABLED = BooleanProperty.create("enabled");
-    // BLINKING: Estado visual para parpadeo de LEDs al recibir datos
+    public static final BooleanProperty POWERED = BlockStateProperties.POWERED; // Señal Serial (Virtual)
+    public static final BooleanProperty ENABLED = BooleanProperty.create("enabled"); // Señal Física (Cables)
     public static final BooleanProperty BLINKING = BooleanProperty.create("blinking");
-
     public static final IntegerProperty MODE = IntegerProperty.create("mode", 0, 2);
 
-    // Estados de cada lado (NONE, INPUT, OUTPUT)
     public static final EnumProperty<IOSide> NORTH = EnumProperty.create("north", IOSide.class);
     public static final EnumProperty<IOSide> SOUTH = EnumProperty.create("south", IOSide.class);
     public static final EnumProperty<IOSide> EAST = EnumProperty.create("east", IOSide.class);
@@ -56,31 +50,18 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final EnumProperty<IOSide> UP = EnumProperty.create("up", IOSide.class);
     public static final EnumProperty<IOSide> DOWN = EnumProperty.create("down", IOSide.class);
 
-    // --- HITBOXES FÍSICAS (Colisión del bloque) ---
     private static final VoxelShape SHAPE_BASE = Shapes.or(
-            Block.box(0, 0, 0, 16, 2, 16), // Placa base
-            Block.box(7, 2, 0, 9, 6, 2.5),   // Torre Norte aprox
-            Block.box(7, 2, 13.5, 9, 6, 16), // Torre Sur aprox
-            Block.box(13.6, 2, 7, 16, 6, 9), // Torre Este aprox
-            Block.box(0, 2, 7, 2.5, 6, 9)    // Torre Oeste aprox
+            Block.box(0, 0, 0, 16, 2, 16),
+            Block.box(7, 2, 0, 9, 6, 2.5),
+            Block.box(7, 2, 13.5, 9, 6, 16),
+            Block.box(13.6, 2, 7, 16, 6, 9),
+            Block.box(0, 2, 7, 2.5, 6, 9)
     );
 
-    // --- HITBOXES LÓGICAS (Botones para clic) ---
-    // Calculadas con precisión desde tu modelo Blockbench
-
-    // Norte: btn-n
     private static final AABB BTN_NORTE = new AABB(7/16d, 2/16d, 0/16d, 9/16d, 6/16d, 2.475/16d);
-
-    // Sur: btn-s
     private static final AABB BTN_SUR   = new AABB(7/16d, 2/16d, 13.575/16d, 9/16d, 6/16d, 16/16d);
-
-    // Este: btn-e
     private static final AABB BTN_ESTE  = new AABB(13.6/16d, 2/16d, 7/16d, 16/16d, 6/16d, 9/16d);
-
-    // Oeste: btn-o
     private static final AABB BTN_OESTE = new AABB(0/16d, 2/16d, 7/16d, 2.45/16d, 6/16d, 9/16d);
-
-    // Abajo: btn-d (Corregido: desplazado hacia el sur Z=11-13)
     private static final AABB BTN_DOWN  = new AABB(6.6/16d, 2/16d, 11/16d, 9.45/16d, 4/16d, 13/16d);
 
     public ArduinoIOBlock(Properties settings) {
@@ -96,14 +77,12 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     }
 
     public Direction getHitButton(Vec3 localHit) {
-        double margin = 0.03; // Margen para facilitar el clic
-
+        double margin = 0.03;
         if (BTN_NORTE.inflate(margin).contains(localHit)) return Direction.NORTH;
         if (BTN_SUR.inflate(margin).contains(localHit))   return Direction.SOUTH;
         if (BTN_ESTE.inflate(margin).contains(localHit))  return Direction.EAST;
         if (BTN_OESTE.inflate(margin).contains(localHit)) return Direction.WEST;
         if (BTN_DOWN.inflate(margin).contains(localHit))  return Direction.DOWN;
-
         return null;
     }
 
@@ -126,19 +105,14 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         return InteractionResult.SUCCESS;
     }
 
-    // --- PROPIEDAD: ASIGNAR DUEÑO ---
     @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
-
         if (!level.isClientSide() && placer instanceof Player player) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ArduinoIOBlockEntity ioEntity) {
                 ioEntity.setOwner(player.getUUID());
-                player.displayClientMessage(
-                        Component.literal("§7[SerialCraft] Placa vinculada a: " + player.getName().getString()),
-                        true
-                );
+                player.displayClientMessage(Component.literal("§7[SerialCraft] Placa vinculada a: " + player.getName().getString()), true);
             }
         }
     }
@@ -148,24 +122,35 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+        // Obtenemos el lado de la placa que está mirando hacia el vecino que pide energía
         Direction side = direction.getOpposite();
         EnumProperty<IOSide> property = getPropertyForDirection(side);
         IOSide ioState = state.getValue(property);
 
-        // LÓGICA DE EMISIÓN DE REDSTONE
-        // Solo emitimos por los puertos configurados como SALIDA (Rojos)
+        // Solo emitimos si ese lado está configurado como SALIDA (Rojo)
         if (ioState == IOSide.OUTPUT) {
-            int currentMode = state.getValue(MODE);
+            int powerLevel = 15;
+            if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
+                powerLevel = io.signalStrength;
+            }
 
-            if (currentMode == 0) {
-                // MODO 0 (Salida/Bridge): Actúa como PUENTE físico.
-                // Emite solo si los inputs verdes tienen energía real (ENABLED).
-                return state.getValue(ENABLED) ? 15 : 0;
-            } else {
-                // MODO 1 o 2 (Entrada/Arduino): Actúa como EMISOR lógico.
-                // Emite si Arduino mandó señal (POWERED).
-                // ENABLED se ignora para la salida (aunque es requisito interno para disparar).
-                return state.getValue(POWERED) ? 15 : 0;
+            int currentMode = state.getValue(MODE);
+            boolean physicalPower = state.getValue(ENABLED); // Energía que entra por los verdes
+            boolean virtualPower = state.getValue(POWERED);  // Señal del Arduino
+
+            // Lógica de Emisión
+            switch (currentMode) {
+                case 0: // SALIDA (Puente)
+                    // Actúa como un cable: Si entra energía (ENABLED), sale energía.
+                    return physicalPower ? powerLevel : 0;
+
+                case 1: // ENTRADA (Controlado por Arduino)
+                    // Solo obedece al Arduino.
+                    return virtualPower ? powerLevel : 0;
+
+                case 2: // HÍBRIDO (OR Gate)
+                    // Emite si (Entra energía física) O (Arduino dice que emita).
+                    return (physicalPower || virtualPower) ? powerLevel : 0;
             }
         }
         return 0;
@@ -192,9 +177,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     @NotNull @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
     @Override public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPE_BASE; }
 
-    @Override public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-        // La lógica de tiempo (timers) se maneja en el BlockEntity
-    }
+    @Override public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {}
 
     @Override public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide()) {

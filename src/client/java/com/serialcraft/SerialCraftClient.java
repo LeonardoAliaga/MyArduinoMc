@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
-
 import java.nio.charset.StandardCharsets;
 
 public class SerialCraftClient implements ClientModInitializer {
@@ -25,8 +24,6 @@ public class SerialCraftClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-
-        // Lectura Serial -> Servidor
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (arduinoPort != null && arduinoPort.isOpen() && arduinoPort.bytesAvailable() > 0) {
                 try {
@@ -40,12 +37,19 @@ public class SerialCraftClient implements ClientModInitializer {
             }
         });
 
-        // Servidor -> Escritura Serial
         ClientPlayNetworking.registerGlobalReceiver(SerialCraft.SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> enviarArduinoLocal(payload.message()));
         });
 
-        // Interacción Bloques
+        // HANDLER LISTA
+        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.BoardListResponsePayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> {
+                if (Minecraft.getInstance().screen instanceof ConnectorScreen screen) {
+                    screen.updateBoardList(payload.boards());
+                }
+            });
+        });
+
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             if (!level.isClientSide() || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 
@@ -59,7 +63,6 @@ public class SerialCraftClient implements ClientModInitializer {
             }
 
             if (state.is(ModBlocks.IO_BLOCK)) {
-                // Verificar clic en botones físicos
                 if (state.getBlock() instanceof ArduinoIOBlock ioBlock) {
                     Vec3 hitPos = hit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());
                     if (ioBlock.getHitButton(hitPos) != null) return InteractionResult.PASS;
@@ -69,7 +72,6 @@ public class SerialCraftClient implements ClientModInitializer {
                 String data = "";
                 var be = level.getBlockEntity(pos);
                 if (be instanceof ArduinoIOBlockEntity io) {
-                    // SEGURIDAD CLIENTE: Si no es mi placa, no abro la UI
                     if (io.ownerUUID != null && !io.ownerUUID.equals(player.getUUID())) {
                         player.displayClientMessage(Component.literal("§cEsta placa pertenece a otro jugador."), true);
                         return InteractionResult.FAIL;

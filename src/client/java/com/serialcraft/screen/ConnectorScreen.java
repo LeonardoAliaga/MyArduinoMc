@@ -1,7 +1,7 @@
 package com.serialcraft.screen;
 
 import com.serialcraft.SerialCraft;
-import com.serialcraft.SerialCraftClient; // Usar el Cliente
+import com.serialcraft.SerialCraftClient;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -10,76 +10,100 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class ConnectorScreen extends Screen {
-    private EditBox portBox;
-    private String status = "§7Estado: Verificando...";
-    private static final int COLOR_FONDO = 0xFFF5F5F5;
     private final BlockPos pos;
+    private EditBox portBox;
+    private String status = "§7Estado: Esperando...";
+    private List<String> boardList = new ArrayList<>();
+
+    // Estilo Moderno (Sin Borde)
+    private static final int BG_COLOR = 0xE6101010;
+    private static final int TITLE_COLOR = 0xFF00E5FF;
+    private static final int SECTION_COLOR = 0xFF55FFFF;
 
     public ConnectorScreen(BlockPos pos) {
-        super(Component.literal("Conector"));
+        super(Component.literal("Laptop Serial"));
         this.pos = pos;
     }
 
     @Override
     protected void init() {
-        int centerX = this.width / 2;
-        int centerY = this.height / 2;
+        boolean isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
+        ClientPlayNetworking.send(new SerialCraft.ConnectorPayload(this.pos, isConnected));
+        ClientPlayNetworking.send(new SerialCraft.BoardListRequestPayload(true));
 
-        this.portBox = new EditBox(this.font, centerX - 60, centerY - 25, 120, 20, Component.literal("Puerto"));
+        int w = 340; int h = 200;
+        int x = (this.width - w) / 2;
+        int y = (this.height - h) / 2;
+
+        this.portBox = new EditBox(this.font, x + 20, y + 40, 200, 20, Component.literal("Puerto"));
         this.portBox.setMaxLength(32);
-
-        // Usar SerialCraftClient para el puerto
-        this.portBox.setValue(
-                SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen()
-                        ? SerialCraftClient.arduinoPort.getSystemPortName()
-                        : "COM3"
-        );
+        this.portBox.setBordered(true);
+        if (isConnected) {
+            this.portBox.setValue(SerialCraftClient.arduinoPort.getSystemPortName());
+            status = "§aConectado: " + SerialCraftClient.arduinoPort.getSystemPortName();
+        } else {
+            this.portBox.setValue("COM3");
+        }
         this.addRenderableWidget(this.portBox);
 
         this.addRenderableWidget(Button.builder(Component.literal("CONECTAR"), b -> {
             status = "§eConectando...";
-            // Usar método del cliente
             String res = SerialCraftClient.conectar(portBox.getValue().trim());
             status = res;
             if (res.contains("Conectado") || res.contains("Ya conectado")) {
                 ClientPlayNetworking.send(new SerialCraft.ConnectorPayload(this.pos, true));
             }
-        }).bounds(centerX - 65, centerY + 5, 60, 20).build());
+        }).bounds(x + 230, y + 40, 90, 20).build());
 
-        this.addRenderableWidget(Button.builder(Component.literal("CERRAR"), b -> {
-            // Usar método del cliente
+        this.addRenderableWidget(Button.builder(Component.literal("DESCONECTAR"), b -> {
             SerialCraftClient.desconectar();
-            status = "§cPuerto cerrado";
+            status = "§cDesconectado";
             ClientPlayNetworking.send(new SerialCraft.ConnectorPayload(this.pos, false));
-        }).bounds(centerX + 5, centerY + 5, 60, 20).build());
+        }).bounds(x + 230, y + 65, 90, 20).build());
+    }
+
+    public void updateBoardList(List<String> boards) {
+        this.boardList = boards;
     }
 
     @Override
-    public void tick() {
-        if (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen()) {
-            String connected = "§2✓ Conectado: " + SerialCraftClient.arduinoPort.getSystemPortName();
-            if (!status.equals(connected)) status = connected;
+    public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        this.renderTransparentBackground(gui);
+
+        int w = 340; int h = 200;
+        int x = (this.width - w) / 2;
+        int y = (this.height - h) / 2;
+
+        // 1. Fondo Limpio
+        gui.fill(x, y, x + w, y + h, BG_COLOR);
+
+        // 2. Título
+        gui.drawCenteredString(this.font, "§lCONTROL CENTRAL (LAPTOP)", this.width / 2, y + 10, TITLE_COLOR);
+
+        // Estado
+        gui.drawString(this.font, status, x + 20, y + 70, 0xFFFFFFFF, false);
+
+        // Lista
+        gui.drawString(this.font, "Placas Detectadas:", x + 20, y + 95, SECTION_COLOR, false);
+
+        // Fondo interno para la lista (opcional, para separar visualmente)
+        gui.fill(x + 20, y + 110, x + w - 20, y + h - 10, 0x88000000);
+
+        int listY = y + 115;
+        if (boardList.isEmpty()) {
+            gui.drawString(this.font, "§7No se encontraron placas activas.", x + 25, listY, 0xFFFFFFFF, false);
+        } else {
+            for (String info : boardList) {
+                if (listY > y + h - 20) break;
+                gui.drawString(this.font, info, x + 25, listY, 0xFFFFFFFF, false);
+                listY += 12;
+            }
         }
-    }
-
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderTransparentBackground(guiGraphics);
-        int w = 200; int h = 110; int x = this.width / 2 - w / 2; int y = this.height / 2 - h / 2;
-
-        guiGraphics.fill(x, y, x + w, y + h, COLOR_FONDO);
-        int border = 0xFF555555;
-        guiGraphics.fill(x, y, x + w, y + 1, border);
-        guiGraphics.fill(x, y + h - 1, x + w, y + h, border);
-        guiGraphics.fill(x, y, x + 1, y + h, border);
-        guiGraphics.fill(x + w - 1, y, x + w, y + h, border);
-
-        guiGraphics.drawCenteredString(this.font, "§lARDUINO MANAGER (CLIENTE)", this.width / 2, y + 10, 0xFF000000);
-        guiGraphics.drawString(this.font, "Puerto COM:", x + 20, y + 30, 0xFF555555, false);
-        guiGraphics.drawCenteredString(this.font, status, this.width / 2, y + h - 15, 0xFF000000);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(gui, mouseX, mouseY, partialTick);
     }
 
     @Override public boolean isPauseScreen() { return false; }

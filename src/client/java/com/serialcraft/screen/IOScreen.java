@@ -1,6 +1,7 @@
 package com.serialcraft.screen;
 
 import com.serialcraft.SerialCraft;
+import com.serialcraft.block.entity.ArduinoIOBlockEntity;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -11,80 +12,178 @@ import net.minecraft.network.chat.Component;
 
 public class IOScreen extends Screen {
     private final BlockPos pos;
-    private int currentMode; // 0, 1, 2
+
+    // Datos temporales
+    private int mode;
+    private int inputType;
+    private int pulseDuration;
+    private int signalStrength;
+    private String boardID;
     private String currentData;
 
-    private Button modeButton;
+    // Widgets
     private EditBox dataBox;
+    private EditBox idBox;
+    private EditBox durationBox;
+    private EditBox strengthBox;
+    private Button btnMode, btnInputType, btnSave;
 
-    private static final int COLOR_FONDO = 0xFFF5F5F5;
-    private static final int COLOR_BORDE = 0xFF404040;
-    private static final int COLOR_TEXTO = 0xFF000000;
+    // --- ESTILO VISUAL (Sin Borde) ---
+    private static final int BG_COLOR = 0xEE0A0A0A;     // Negro profundo (93% opacidad)
+    private static final int TITLE_COLOR = 0xFF00E5FF; // Cyan Neón (Solo texto)
+    private static final int SECTION_COLOR = 0xFF55FFFF;
+    private static final int TEXT_COLOR = 0xFFAAAAAA;
 
-    // Constructor recibe int mode
     public IOScreen(BlockPos pos, int mode, String data) {
         super(Component.literal("Config IO"));
         this.pos = pos;
-        this.currentMode = mode;
-        this.currentData = data == null ? "" : data;
+
+        if (net.minecraft.client.Minecraft.getInstance().level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
+            this.inputType = io.inputType;
+            this.pulseDuration = io.pulseDuration;
+            this.signalStrength = io.signalStrength;
+            this.boardID = io.boardID;
+        } else {
+            this.inputType = 0;
+            this.pulseDuration = 10;
+            this.signalStrength = 15;
+            this.boardID = "placa_" + (int)(Math.random()*1000);
+        }
+        this.mode = mode;
+        this.currentData = (data == null) ? "" : data;
     }
 
     @Override
     protected void init() {
-        int cx = this.width / 2;
-        int cy = this.height / 2;
+        int w = 320;
+        int h = 210;
+        int x = (this.width - w) / 2;
+        int y = (this.height - h) / 2;
 
-        // Botón que rota los modos
-        modeButton = Button.builder(Component.literal(getModeText()), b -> {
-            this.currentMode = (this.currentMode + 1) % 3; // 0 -> 1 -> 2 -> 0...
+        // ID Box
+        idBox = new EditBox(font, x + 20, y + 40, 280, 18, Component.literal("ID"));
+        idBox.setValue(this.boardID);
+        idBox.setMaxLength(20);
+        addRenderableWidget(idBox);
+
+        // --- COMPORTAMIENTO ---
+
+        // Botón Modo
+        btnMode = Button.builder(Component.literal(getModeText()), b -> {
+            this.mode = (this.mode + 1) % 3;
             b.setMessage(Component.literal(getModeText()));
-        }).bounds(cx - 100, cy - 25, 200, 20).build();
-        this.addRenderableWidget(modeButton);
+            refreshWidgets();
+        }).bounds(x + 20, y + 90, 135, 20).build();
+        addRenderableWidget(btnMode);
 
-        dataBox = new EditBox(this.font, cx - 90, cy + 15, 180, 20, Component.literal("Data"));
+        // Botón Tipo
+        btnInputType = Button.builder(Component.literal(getInputTypeText()), b -> {
+            this.inputType = (this.inputType == 0) ? 1 : 0;
+            b.setMessage(Component.literal(getInputTypeText()));
+            refreshWidgets();
+        }).bounds(x + 165, y + 90, 135, 20).build();
+        addRenderableWidget(btnInputType);
+
+        // Caja Duración
+        durationBox = new EditBox(font, x + 165, y + 115, 60, 18, Component.literal("Ticks"));
+        durationBox.setValue(String.valueOf(this.pulseDuration));
+        durationBox.setFilter(s -> s.matches("\\d*"));
+        durationBox.setMaxLength(5);
+        addRenderableWidget(durationBox);
+
+        // Caja Intensidad
+        strengthBox = new EditBox(font, x + 240, y + 115, 60, 18, Component.literal("Power"));
+        strengthBox.setValue(String.valueOf(this.signalStrength));
+        strengthBox.setFilter(s -> s.matches("\\d*"));
+        strengthBox.setMaxLength(2);
+        addRenderableWidget(strengthBox);
+
+        // Data Serial
+        dataBox = new EditBox(font, x + 20, y + 155, 280, 18, Component.literal("Data"));
         dataBox.setValue(this.currentData);
         dataBox.setMaxLength(50);
-        this.addRenderableWidget(dataBox);
+        addRenderableWidget(dataBox);
 
-        // Guardar cambios
-        this.addRenderableWidget(Button.builder(Component.literal("GUARDAR"), b -> {
-            ClientPlayNetworking.send(
-                    new SerialCraft.ConfigPayload(pos, currentMode, dataBox.getValue())
-            );
-            this.onClose();
-        }).bounds(cx - 60, cy + 55, 120, 20).build());
+        // Guardar
+        btnSave = Button.builder(Component.literal("§l[ GUARDAR CAMBIOS ]"), b -> sendPacket())
+                .bounds(x + 100, y + 185, 120, 20).build();
+        addRenderableWidget(btnSave);
+
+        refreshWidgets();
+    }
+
+    private void refreshWidgets() {
+        boolean isInput = (mode != 0); // 1 o 2
+
+        btnInputType.visible = isInput;
+        durationBox.visible = isInput && (inputType == 1);
+        strengthBox.visible = true;
+    }
+
+    private void sendPacket() {
+        int finalDuration = 10;
+        int finalStrength = 15;
+
+        try {
+            String txt = durationBox.getValue().trim();
+            if(!txt.isEmpty()) finalDuration = Integer.parseInt(txt);
+            if(finalDuration < 1) finalDuration = 1;
+            if(finalDuration > 72000) finalDuration = 72000;
+
+            String strTxt = strengthBox.getValue().trim();
+            if(!strTxt.isEmpty()) finalStrength = Integer.parseInt(strTxt);
+            if(finalStrength < 1) finalStrength = 1;
+            if(finalStrength > 15) finalStrength = 15;
+
+        } catch(Exception ignored){}
+
+        ClientPlayNetworking.send(new SerialCraft.ConfigPayload(
+                pos, mode, dataBox.getValue(), inputType, finalDuration, finalStrength, idBox.getValue()
+        ));
+        this.onClose();
     }
 
     private String getModeText() {
-        return switch (this.currentMode) {
-            case 0 -> "§cMODO: SALIDA (MC -> Arduino)";
-            case 1 -> "§aMODO: ENTRADA (Pulso)";
-            case 2 -> "§9MODO: ENTRADA (Interruptor)";
+        return switch (mode) {
+            case 0 -> "§cMODO: SALIDA (PC->MC)";
+            case 1 -> "§aMODO: ENTRADA (MC->PC)";
+            case 2 -> "§9MODO: HÍBRIDO";
             default -> "Error";
         };
     }
 
-    @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderTransparentBackground(guiGraphics);
-
-        int w = 260;
-        int h = 150;
-        int x = this.width / 2 - w / 2;
-        int y = this.height / 2 - h / 2;
-
-        guiGraphics.fill(x, y, x + w, y + h, COLOR_FONDO);
-        guiGraphics.fill(x, y, x + w, y + 1, COLOR_BORDE);
-        guiGraphics.fill(x, y + h - 1, x + w, y + h, COLOR_BORDE);
-        guiGraphics.fill(x, y, x + 1, y + h, COLOR_BORDE);
-        guiGraphics.fill(x + w - 1, y, x + w, y + h, COLOR_BORDE);
-
-        guiGraphics.drawCenteredString(this.font, "§lCONFIGURACIÓN NODO", this.width / 2, y + 10, COLOR_TEXTO);
-        guiGraphics.drawString(this.font, "Palabra Clave (Arduino):", x + 20, y + 70, 0xFF555555, false);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+    private String getInputTypeText() {
+        return (inputType == 0) ? "Tipo: Interruptor" : "Tipo: Pulso";
     }
 
     @Override
-    public boolean isPauseScreen() { return false; }
+    public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        this.renderTransparentBackground(gui);
+
+        int w = 320;
+        int h = 210;
+        int x = (this.width - w) / 2;
+        int y = (this.height - h) / 2;
+
+        // 1. Fondo Limpio (Sin borde)
+        gui.fill(x, y, x + w, y + h, BG_COLOR);
+
+        // 2. Título
+        gui.drawCenteredString(font, "§lCONFIGURACIÓN PLACA IO", this.width / 2, y + 10, TITLE_COLOR);
+
+        // 3. Textos
+        gui.drawString(font, "Identificación", x + 20, y + 28, SECTION_COLOR, false);
+        gui.drawString(font, "Comportamiento Lógico", x + 20, y + 78, SECTION_COLOR, false);
+        gui.drawString(font, "Comunicación Serial (Arduino)", x + 20, y + 143, SECTION_COLOR, false);
+
+        if(durationBox.visible) {
+            gui.drawString(font, "Duración (Ticks):", x + 165, y + 115 + 4, TEXT_COLOR, false);
+        }
+
+        gui.drawString(font, "Señal (1-15):", x + 240, y + 115 - 10, TEXT_COLOR, false);
+
+        super.render(gui, mouseX, mouseY, partialTick);
+    }
+
+    @Override public boolean isPauseScreen() { return false; }
 }

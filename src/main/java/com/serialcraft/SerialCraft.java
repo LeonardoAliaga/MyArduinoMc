@@ -18,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 public class SerialCraft implements ModInitializer {
@@ -36,26 +38,24 @@ public class SerialCraft implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(ConfigPayload.TYPE, ConfigPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ConnectorPayload.TYPE, ConnectorPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(SerialInputPayload.TYPE, SerialInputPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(SerialOutputPayload.TYPE, SerialOutputPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(BoardListRequestPayload.TYPE, BoardListRequestPayload.CODEC);
 
-        // 1. CONFIGURACIÓN (Seguridad Añadida)
+        PayloadTypeRegistry.playS2C().register(SerialOutputPayload.TYPE, SerialOutputPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BoardListResponsePayload.TYPE, BoardListResponsePayload.CODEC);
+
+        // Configuración
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
             context.server().execute(() -> {
                 if (player.level().getBlockEntity(payload.pos) instanceof ArduinoIOBlockEntity entity) {
-                    // SEGURIDAD: Verificar dueño
                     if (entity.ownerUUID != null && entity.ownerUUID.equals(player.getUUID())) {
-                        entity.setConfig(payload.mode, payload.data);
-                    } else {
-                        player.displayClientMessage(
-                                net.minecraft.network.chat.Component.literal("§cAcceso Denegado: No eres el dueño."), true
-                        );
+                        entity.setConfig(payload.mode, payload.data, payload.inputType, payload.pulseDuration, payload.signalStrength, payload.boardID);
                     }
                 }
             });
         });
 
-        // 2. Conector
+        // Conector
         ServerPlayNetworking.registerGlobalReceiver(ConnectorPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 var level = context.player().level();
@@ -66,53 +66,76 @@ public class SerialCraft implements ModInitializer {
             });
         });
 
-        // 3. Señal de Arduino (Cliente -> Servidor)
+        // Serial Input
         ServerPlayNetworking.registerGlobalReceiver(SerialInputPayload.TYPE, (payload, context) -> {
             ServerPlayer sender = context.player();
-            String msg = payload.message;
             context.server().execute(() -> {
                 synchronized (activeIOBlocks) {
                     for (ArduinoIOBlockEntity io : activeIOBlocks) {
-                        // Seguridad: Solo activar mis propios bloques
-                        if (io.targetData.equals(msg) &&
-                                io.ownerUUID != null &&
-                                io.ownerUUID.equals(sender.getUUID())) {
+                        if (io.targetData.equals(payload.message()) && io.ownerUUID != null && io.ownerUUID.equals(sender.getUUID())) {
                             io.triggerAction();
                         }
                     }
                 }
             });
         });
+
+        // SOLICITUD LISTA
+        ServerPlayNetworking.registerGlobalReceiver(BoardListRequestPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            context.server().execute(() -> {
+                List<String> boardInfos = new ArrayList<>();
+                synchronized (activeIOBlocks) {
+                    for (ArduinoIOBlockEntity io : activeIOBlocks) {
+                        if (io.ownerUUID != null && io.ownerUUID.equals(player.getUUID())) {
+                            String info = String.format("§b%s §7| §f%s §7| %s",
+                                    io.boardID,
+                                    io.targetData,
+                                    (io.ioMode == 0 ? "§cSAL" : (io.ioMode == 1 ? "§aENT" : "§9HIB"))
+                            );
+                            boardInfos.add(info);
+                        }
+                    }
+                }
+                ServerPlayNetworking.send(player, new BoardListResponsePayload(boardInfos));
+            });
+        });
     }
 
-    // --- PACKETS ---
-    public record ConfigPayload(BlockPos pos, int mode, String data) implements CustomPacketPayload {
+    // Records
+    public record ConfigPayload(BlockPos pos, int mode, String data, int inputType, int pulseDuration, int signalStrength, String boardID) implements CustomPacketPayload {
         public static final Type<ConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "config_packet"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, ConfigPayload> CODEC = StreamCodec.of(
-                (buf, val) -> { buf.writeBlockPos(val.pos); buf.writeInt(val.mode); buf.writeUtf(val.data); },
-                buf -> new ConfigPayload(buf.readBlockPos(), buf.readInt(), buf.readUtf())
-        );
+        public static final StreamCodec<RegistryFriendlyByteBuf, ConfigPayload> CODEC = StreamCodec.of((b, v) -> {
+            b.writeBlockPos(v.pos); b.writeInt(v.mode); b.writeUtf(v.data); b.writeInt(v.inputType); b.writeInt(v.pulseDuration); b.writeInt(v.signalStrength); b.writeUtf(v.boardID);
+        }, b -> new ConfigPayload(b.readBlockPos(), b.readInt(), b.readUtf(), b.readInt(), b.readInt(), b.readInt(), b.readUtf()));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
-
     public record ConnectorPayload(BlockPos pos, boolean connected) implements CustomPacketPayload {
         public static final Type<ConnectorPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "connector_packet"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, ConnectorPayload> CODEC = StreamCodec.of(
-                (buf, val) -> { buf.writeBlockPos(val.pos); buf.writeBoolean(val.connected); },
-                buf -> new ConnectorPayload(buf.readBlockPos(), buf.readBoolean())
-        );
+        public static final StreamCodec<RegistryFriendlyByteBuf, ConnectorPayload> CODEC = StreamCodec.of((b, v) -> { b.writeBlockPos(v.pos); b.writeBoolean(v.connected); }, b -> new ConnectorPayload(b.readBlockPos(), b.readBoolean()));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
-
     public record SerialInputPayload(String message) implements CustomPacketPayload {
         public static final Type<SerialInputPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "serial_in_packet"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, SerialInputPayload> CODEC = StreamCodec.of((buf, val) -> buf.writeUtf(val.message), buf -> new SerialInputPayload(buf.readUtf()));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SerialInputPayload> CODEC = StreamCodec.of((b, v) -> b.writeUtf(v.message), b -> new SerialInputPayload(b.readUtf()));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
-
     public record SerialOutputPayload(String message) implements CustomPacketPayload {
         public static final Type<SerialOutputPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "serial_out_packet"));
-        public static final StreamCodec<RegistryFriendlyByteBuf, SerialOutputPayload> CODEC = StreamCodec.of((buf, val) -> buf.writeUtf(val.message), buf -> new SerialOutputPayload(buf.readUtf()));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SerialOutputPayload> CODEC = StreamCodec.of((b, v) -> b.writeUtf(v.message), b -> new SerialOutputPayload(b.readUtf()));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+    public record BoardListRequestPayload(boolean dummy) implements CustomPacketPayload {
+        public static final Type<BoardListRequestPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "board_list_req"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, BoardListRequestPayload> CODEC = StreamCodec.of((b, v) -> b.writeBoolean(v.dummy), b -> new BoardListRequestPayload(b.readBoolean()));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+    public record BoardListResponsePayload(List<String> boards) implements CustomPacketPayload {
+        public static final Type<BoardListResponsePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MOD_ID, "board_list_res"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, BoardListResponsePayload> CODEC = StreamCodec.of(
+                (b, v) -> { b.writeInt(v.boards.size()); v.boards.forEach(b::writeUtf); },
+                b -> { int s = b.readInt(); List<String> l = new ArrayList<>(); for(int i=0; i<s; i++) l.add(b.readUtf()); return new BoardListResponsePayload(l); }
+        );
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 }
