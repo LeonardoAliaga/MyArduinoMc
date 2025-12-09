@@ -3,6 +3,7 @@ package com.serialcraft.block;
 import com.mojang.serialization.MapCodec;
 import com.serialcraft.SerialCraft;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import com.serialcraft.block.entity.ModBlockEntities; // Asegúrate de importar tu clase correcta
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -38,8 +39,10 @@ import org.jetbrains.annotations.Nullable;
 public class ArduinoIOBlock extends BaseEntityBlock {
 
     public static final MapCodec<ArduinoIOBlock> CODEC = simpleCodec(ArduinoIOBlock::new);
-    public static final BooleanProperty POWERED = BlockStateProperties.POWERED; // Señal Serial (Virtual)
-    public static final BooleanProperty ENABLED = BooleanProperty.create("enabled"); // Señal Física (Cables)
+
+    // Propiedades originales (necesarias para tus modelos JSON y texturas)
+    public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
+    public static final BooleanProperty ENABLED = BooleanProperty.create("enabled");
     public static final BooleanProperty BLINKING = BooleanProperty.create("blinking");
     public static final IntegerProperty MODE = IntegerProperty.create("mode", 0, 2);
 
@@ -50,6 +53,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final EnumProperty<IOSide> UP = EnumProperty.create("up", IOSide.class);
     public static final EnumProperty<IOSide> DOWN = EnumProperty.create("down", IOSide.class);
 
+    // Hitboxes (Copiadas exactas de tu original para que los botones funcionen igual)
     private static final VoxelShape SHAPE_BASE = Shapes.or(
             Block.box(0, 0, 0, 16, 2, 16),
             Block.box(7, 2, 0, 9, 6, 2.5),
@@ -68,7 +72,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         super(settings);
         this.registerDefaultState(this.stateDefinition.any()
                 .setValue(POWERED, false)
-                .setValue(ENABLED, false)
+                .setValue(ENABLED, false) // Originalmente false, la entidad lo pondrá en true si isSoftOn=true
                 .setValue(BLINKING, false)
                 .setValue(MODE, 0)
                 .setValue(NORTH, IOSide.NONE).setValue(SOUTH, IOSide.NONE)
@@ -76,6 +80,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
                 .setValue(UP, IOSide.NONE).setValue(DOWN, IOSide.NONE));
     }
 
+    // Cálculo de hitbox para saber qué botón se presionó
     public Direction getHitButton(Vec3 localHit) {
         double margin = 0.03;
         if (BTN_NORTE.inflate(margin).contains(localHit)) return Direction.NORTH;
@@ -98,8 +103,10 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         Direction btn = getHitButton(hitPos);
 
         if (btn != null) {
+            // Interactuar con los botones físicos (Cables)
             io.onButtonInteract(player, btn, player.isShiftKeyDown());
         } else {
+            // Interactuar con la placa (GUI / Info)
             io.onPlayerInteract(player);
         }
         return InteractionResult.SUCCESS;
@@ -122,35 +129,24 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        // Obtenemos el lado de la placa que está mirando hacia el vecino que pide energía
+        // Lado del bloque opuesto a la cara del vecino
         Direction side = direction.getOpposite();
         EnumProperty<IOSide> property = getPropertyForDirection(side);
         IOSide ioState = state.getValue(property);
 
-        // Solo emitimos si ese lado está configurado como SALIDA (Rojo)
+        // Solo emitimos energía si el lado es SALIDA (Rojo)
         if (ioState == IOSide.OUTPUT) {
-            int powerLevel = 15;
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
-                powerLevel = io.signalStrength;
-            }
 
-            int currentMode = state.getValue(MODE);
-            boolean physicalPower = state.getValue(ENABLED); // Energía que entra por los verdes
-            boolean virtualPower = state.getValue(POWERED);  // Señal del Arduino
+                // --- CAMBIO PRINCIPAL AQUÍ ---
+                // En lugar del switch(MODE) antiguo, usamos la nueva lógica de la entidad.
 
-            // Lógica de Emisión
-            switch (currentMode) {
-                case 0: // SALIDA (Puente)
-                    // Actúa como un cable: Si entra energía (ENABLED), sale energía.
-                    return physicalPower ? powerLevel : 0;
+                // 1. Si está apagado por software (Botón UI), cortamos energía.
+                if (!io.isSoftOn) return 0;
 
-                case 1: // ENTRADA (Controlado por Arduino)
-                    // Solo obedece al Arduino.
-                    return virtualPower ? powerLevel : 0;
-
-                case 2: // HÍBRIDO (OR Gate)
-                    // Emite si (Entra energía física) O (Arduino dice que emita).
-                    return (physicalPower || virtualPower) ? powerLevel : 0;
+                // 2. Si está encendido, emitimos solo si la lógica de la entidad (outputState) dice que sí.
+                // (outputState ya calcula los pulsos, confirmaciones y toggles).
+                return io.outputState ? io.signalStrength : 0;
             }
         }
         return 0;
@@ -179,6 +175,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     @Override public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {}
 
+    // Importante mantener esto para que la lista de placas activas se limpie al romper el bloque
     @Override public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide()) {
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) SerialCraft.activeIOBlocks.remove(io);
@@ -187,7 +184,8 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     }
 
     @Nullable @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        if (type == com.serialcraft.block.entity.ModBlockEntities.IO_BLOCK_ENTITY) {
+        // Asegúrate de usar tu referencia correcta a ModBlockEntities.IO_BLOCK_ENTITY
+        if (type == ModBlockEntities.IO_BLOCK_ENTITY) {
             return (lvl, p, st, be) -> { if (!lvl.isClientSide() && be instanceof ArduinoIOBlockEntity io) io.tickServer(); };
         }
         return null;

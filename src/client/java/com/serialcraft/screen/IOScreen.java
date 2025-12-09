@@ -13,24 +13,25 @@ import net.minecraft.network.chat.Component;
 public class IOScreen extends Screen {
     private final BlockPos pos;
 
-    // Datos temporales
-    private int mode;
-    private int inputType;
+    // Datos
+    private int ioMode;
+    private int logicMode;   // Nuevo: AND/OR/XOR
+    private int outputType;  // Nuevo: Pulse/Switch
+    private boolean isSoftOn; // Nuevo: Power
+
     private int pulseDuration;
     private int signalStrength;
+    private int inputType; // Legacy
     private String boardID;
     private String currentData;
 
     // Widgets
-    private EditBox dataBox;
-    private EditBox idBox;
-    private EditBox durationBox;
-    private EditBox strengthBox;
-    private Button btnMode, btnInputType, btnSave;
+    private EditBox dataBox, idBox, durationBox, strengthBox;
+    private Button btnIoMode, btnLogic, btnOutput, btnPower, btnSave;
 
-    // --- ESTILO VISUAL (Sin Borde) ---
-    private static final int BG_COLOR = 0xEE0A0A0A;     // Negro profundo (93% opacidad)
-    private static final int TITLE_COLOR = 0xFF00E5FF; // Cyan Neón (Solo texto)
+    // Estilos
+    private static final int BG_COLOR = 0xEE0A0A0A;
+    private static final int TITLE_COLOR = 0xFF00E5FF;
     private static final int SECTION_COLOR = 0xFF55FFFF;
     private static final int TEXT_COLOR = 0xFFAAAAAA;
 
@@ -39,73 +40,83 @@ public class IOScreen extends Screen {
         this.pos = pos;
 
         if (net.minecraft.client.Minecraft.getInstance().level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
+            this.ioMode = io.ioMode;
+            this.logicMode = io.logicMode;
+            this.outputType = io.outputType;
+            this.isSoftOn = io.isSoftOn;
             this.inputType = io.inputType;
             this.pulseDuration = io.pulseDuration;
             this.signalStrength = io.signalStrength;
             this.boardID = io.boardID;
+            this.currentData = io.targetData;
         } else {
+            // Valores por defecto
+            this.ioMode = mode;
+            this.logicMode = 0;
+            this.outputType = 0;
+            this.isSoftOn = true;
             this.inputType = 0;
             this.pulseDuration = 10;
             this.signalStrength = 15;
             this.boardID = "placa_" + (int)(Math.random()*1000);
+            this.currentData = (data == null) ? "" : data;
         }
-        this.mode = mode;
-        this.currentData = (data == null) ? "" : data;
     }
 
     @Override
     protected void init() {
-        int w = 320;
-        int h = 210;
+        int w = 320; int h = 210;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // ID Box
-        idBox = new EditBox(font, x + 20, y + 40, 280, 18, Component.literal("ID"));
+        // ID y Power (Parte superior)
+        idBox = new EditBox(font, x + 20, y + 40, 200, 18, Component.literal("ID"));
         idBox.setValue(this.boardID);
-        idBox.setMaxLength(20);
         addRenderableWidget(idBox);
 
-        // --- COMPORTAMIENTO ---
+        btnPower = Button.builder(Component.literal(isSoftOn ? "§a[ON]" : "§c[OFF]"), b -> {
+            this.isSoftOn = !this.isSoftOn;
+            b.setMessage(Component.literal(isSoftOn ? "§a[ON]" : "§c[OFF]"));
+        }).bounds(x + 230, y + 39, 70, 20).build();
+        addRenderableWidget(btnPower);
 
-        // Botón Modo
-        btnMode = Button.builder(Component.literal(getModeText()), b -> {
-            this.mode = (this.mode + 1) % 3;
-            b.setMessage(Component.literal(getModeText()));
+        // Fila 1: Modo IO y Lógica de Entrada
+        btnIoMode = Button.builder(Component.literal(getIoModeText()), b -> {
+            this.ioMode = (this.ioMode + 1) % 3;
+            b.setMessage(Component.literal(getIoModeText()));
             refreshWidgets();
-        }).bounds(x + 20, y + 90, 135, 20).build();
-        addRenderableWidget(btnMode);
+        }).bounds(x + 20, y + 85, 135, 20).build();
+        addRenderableWidget(btnIoMode);
 
-        // Botón Tipo
-        btnInputType = Button.builder(Component.literal(getInputTypeText()), b -> {
-            this.inputType = (this.inputType == 0) ? 1 : 0;
-            b.setMessage(Component.literal(getInputTypeText()));
+        btnLogic = Button.builder(Component.literal(getLogicText()), b -> {
+            this.logicMode = (this.logicMode + 1) % 3;
+            b.setMessage(Component.literal(getLogicText()));
+        }).bounds(x + 165, y + 85, 135, 20).build();
+        addRenderableWidget(btnLogic);
+
+        // Fila 2: Tipo de Salida y Valores Numéricos
+        btnOutput = Button.builder(Component.literal(getOutputText()), b -> {
+            this.outputType = (this.outputType + 1) % 2;
+            b.setMessage(Component.literal(getOutputText()));
             refreshWidgets();
-        }).bounds(x + 165, y + 90, 135, 20).build();
-        addRenderableWidget(btnInputType);
+        }).bounds(x + 20, y + 120, 135, 20).build();
+        addRenderableWidget(btnOutput);
 
-        // Caja Duración
-        durationBox = new EditBox(font, x + 165, y + 115, 60, 18, Component.literal("Ticks"));
+        durationBox = new EditBox(font, x + 165, y + 120, 60, 18, Component.literal("Ticks"));
         durationBox.setValue(String.valueOf(this.pulseDuration));
-        durationBox.setFilter(s -> s.matches("\\d*"));
-        durationBox.setMaxLength(5);
         addRenderableWidget(durationBox);
 
-        // Caja Intensidad
-        strengthBox = new EditBox(font, x + 240, y + 115, 60, 18, Component.literal("Power"));
+        strengthBox = new EditBox(font, x + 240, y + 120, 60, 18, Component.literal("Power"));
         strengthBox.setValue(String.valueOf(this.signalStrength));
-        strengthBox.setFilter(s -> s.matches("\\d*"));
-        strengthBox.setMaxLength(2);
         addRenderableWidget(strengthBox);
 
-        // Data Serial
-        dataBox = new EditBox(font, x + 20, y + 155, 280, 18, Component.literal("Data"));
+        // Data Serial (Parte inferior)
+        dataBox = new EditBox(font, x + 20, y + 160, 280, 18, Component.literal("Data"));
         dataBox.setValue(this.currentData);
-        dataBox.setMaxLength(50);
         addRenderableWidget(dataBox);
 
         // Guardar
-        btnSave = Button.builder(Component.literal("§l[ GUARDAR CAMBIOS ]"), b -> sendPacket())
+        btnSave = Button.builder(Component.literal("§l[ GUARDAR CONFIG ]"), b -> sendPacket())
                 .bounds(x + 100, y + 185, 120, 20).build();
         addRenderableWidget(btnSave);
 
@@ -113,74 +124,75 @@ public class IOScreen extends Screen {
     }
 
     private void refreshWidgets() {
-        boolean isInput = (mode != 0); // 1 o 2
-
-        btnInputType.visible = isInput;
-        durationBox.visible = isInput && (inputType == 1);
-        strengthBox.visible = true;
+        // La duración (ticks) solo es relevante si estamos en modo PULSO (outputType 0)
+        durationBox.visible = (outputType == 0);
+        // El botón de lógica solo es útil si hay pines de entrada (Modo 0, 2),
+        // pero lo dejamos visible para configurar previamente.
     }
 
-    private void sendPacket() {
-        int finalDuration = 10;
-        int finalStrength = 15;
-
-        try {
-            String txt = durationBox.getValue().trim();
-            if(!txt.isEmpty()) finalDuration = Integer.parseInt(txt);
-            if(finalDuration < 1) finalDuration = 1;
-            if(finalDuration > 72000) finalDuration = 72000;
-
-            String strTxt = strengthBox.getValue().trim();
-            if(!strTxt.isEmpty()) finalStrength = Integer.parseInt(strTxt);
-            if(finalStrength < 1) finalStrength = 1;
-            if(finalStrength > 15) finalStrength = 15;
-
-        } catch(Exception ignored){}
-
-        ClientPlayNetworking.send(new SerialCraft.ConfigPayload(
-                pos, mode, dataBox.getValue(), inputType, finalDuration, finalStrength, idBox.getValue()
-        ));
-        this.onClose();
-    }
-
-    private String getModeText() {
-        return switch (mode) {
-            case 0 -> "§cMODO: SALIDA (PC->MC)";
-            case 1 -> "§aMODO: ENTRADA (MC->PC)";
-            case 2 -> "§9MODO: HÍBRIDO";
+    private String getIoModeText() {
+        return switch (ioMode) {
+            case 0 -> "§cDIR: SALIDA (PC->MC)";
+            case 1 -> "§aDIR: ENTRADA (MC->PC)";
+            case 2 -> "§9DIR: HÍBRIDO";
             default -> "Error";
         };
     }
 
-    private String getInputTypeText() {
-        return (inputType == 0) ? "Tipo: Interruptor" : "Tipo: Pulso";
+    private String getLogicText() {
+        return switch (logicMode) {
+            case 0 -> "Lógica: OR (Alguno)";
+            case 1 -> "Lógica: AND (Todos)";
+            case 2 -> "Lógica: XOR (Impar)";
+            default -> "Error";
+        };
+    }
+
+    private String getOutputText() {
+        return (outputType == 0) ? "Salida: PULSO" : "Salida: INTERRUPTOR";
+    }
+
+    private void sendPacket() {
+        int d = 10; try { d = Integer.parseInt(durationBox.getValue()); } catch(Exception ignored){}
+        int s = 15; try { s = Integer.parseInt(strengthBox.getValue()); } catch(Exception ignored){}
+
+        // Enviar paquete actualizado con TODOS los campos
+        ClientPlayNetworking.send(new SerialCraft.ConfigPayload(
+                pos,
+                ioMode,
+                dataBox.getValue(),
+                inputType, // Mantenemos inputType por si acaso, aunque no lo editemos aquí
+                d,
+                s,
+                idBox.getValue(),
+                logicMode,   // Nuevo
+                outputType,  // Nuevo
+                isSoftOn     // Nuevo
+        ));
+        this.onClose();
     }
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         this.renderTransparentBackground(gui);
 
-        int w = 320;
-        int h = 210;
+        int w = 320; int h = 210;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // 1. Fondo Limpio (Sin borde)
+        // Fondo
         gui.fill(x, y, x + w, y + h, BG_COLOR);
+        gui.drawCenteredString(font, "§lPANEL DE CONTROL SERIAL", this.width / 2, y + 10, TITLE_COLOR);
 
-        // 2. Título
-        gui.drawCenteredString(font, "§lCONFIGURACIÓN PLACA IO", this.width / 2, y + 10, TITLE_COLOR);
-
-        // 3. Textos
-        gui.drawString(font, "Identificación", x + 20, y + 28, SECTION_COLOR, false);
-        gui.drawString(font, "Comportamiento Lógico", x + 20, y + 78, SECTION_COLOR, false);
-        gui.drawString(font, "Comunicación Serial (Arduino)", x + 20, y + 143, SECTION_COLOR, false);
+        // Etiquetas
+        gui.drawString(font, "Identificación & Energía", x + 20, y + 28, SECTION_COLOR, false);
+        gui.drawString(font, "Lógica de Pines (Entrada -> Salida)", x + 20, y + 72, SECTION_COLOR, false);
+        gui.drawString(font, "Comunicación Serial", x + 20, y + 148, SECTION_COLOR, false);
 
         if(durationBox.visible) {
-            gui.drawString(font, "Duración (Ticks):", x + 165, y + 115 + 4, TEXT_COLOR, false);
+            gui.drawString(font, "Ticks", x + 165, y + 110, TEXT_COLOR, false);
         }
-
-        gui.drawString(font, "Señal (1-15):", x + 240, y + 115 - 10, TEXT_COLOR, false);
+        gui.drawString(font, "Fuerza", x + 240, y + 110, TEXT_COLOR, false);
 
         super.render(gui, mouseX, mouseY, partialTick);
     }

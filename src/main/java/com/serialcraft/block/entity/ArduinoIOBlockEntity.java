@@ -28,46 +28,47 @@ import java.util.UUID;
 public class ArduinoIOBlockEntity extends BlockEntity {
 
     // Configuración
-    public int ioMode = 0; // 0=Salida, 1=Entrada, 2=Híbrido
+    public int ioMode = 0;
     public String targetData = "";
     public UUID ownerUUID = null;
-
-    // Avanzado
     public int inputType = 0;
     public int pulseDuration = 10;
     public int signalStrength = 15;
     public String boardID = "placa_" + (int)(Math.random() * 9999);
 
+    // Configuración Avanzada
+    public int logicMode = 0;   // 0=OR, 1=AND, 2=XOR
+    public int outputType = 0;  // 0=Pulso, 1=Interruptor
+    public boolean isSoftOn = true;
+
     // Estado Interno
-    private boolean wasPowered = false;
+    public boolean outputState = false;
+    private boolean wasLogicMet = false;
     private int pulseTimer = 0;
     private int blinkTimer = 0;
-
-    // Rastreo de entradas (Bitmask) para detectar cambios individuales
-    // Bit 0=Down, 1=Up, 2=North, 3=South, 4=West, 5=East
-    private int lastInputMask = 0;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
     }
 
-    public void setOwner(UUID uuid) {
-        this.ownerUUID = uuid;
-        setChanged();
-    }
+    public void setOwner(UUID uuid) { this.ownerUUID = uuid; setChanged(); }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putInt("ioMode", ioMode);
         output.putString("targetData", targetData != null ? targetData : "");
-        output.putBoolean("wasPowered", wasPowered);
         if (this.ownerUUID != null) output.putString("OwnerUUID", this.ownerUUID.toString());
         output.putInt("inputType", inputType);
         output.putInt("pulseDuration", pulseDuration);
         output.putInt("signalStrength", signalStrength);
-        output.putString("boardID", boardID != null ? boardID : "error_id");
-        output.putInt("lastInputMask", lastInputMask);
+        output.putString("boardID", boardID);
+
+        output.putInt("logicMode", logicMode);
+        output.putInt("outputType", outputType);
+        output.putBoolean("isSoftOn", isSoftOn);
+        output.putBoolean("outputState", outputState);
+        output.putBoolean("wasLogicMet", wasLogicMet);
     }
 
     @Override
@@ -75,7 +76,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         super.loadAdditional(input);
         this.ioMode = input.getIntOr("ioMode", 0);
         this.targetData = input.getString("targetData").orElse("");
-        this.wasPowered = input.getBooleanOr("wasPowered", false);
         input.getString("OwnerUUID").ifPresent(uuidStr -> {
             try { this.ownerUUID = UUID.fromString(uuidStr); } catch (Exception ignored) { this.ownerUUID = null; }
         });
@@ -83,19 +83,25 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.pulseDuration = input.getIntOr("pulseDuration", 10);
         this.signalStrength = input.getIntOr("signalStrength", 15);
         this.boardID = input.getString("boardID").orElse(this.boardID);
-        this.lastInputMask = input.getIntOr("lastInputMask", 0);
+
+        this.logicMode = input.getIntOr("logicMode", 0);
+        this.outputType = input.getIntOr("outputType", 0);
+        this.isSoftOn = input.getBooleanOr("isSoftOn", true);
+        this.outputState = input.getBooleanOr("outputState", false);
+        this.wasLogicMet = input.getBooleanOr("wasLogicMet", false);
     }
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         tag.putInt("ioMode", ioMode);
-        tag.putString("targetData", targetData != null ? targetData : "");
-        if (ownerUUID != null) tag.putString("OwnerUUID", ownerUUID.toString());
-        tag.putInt("inputType", inputType);
+        tag.putString("boardID", boardID);
+        tag.putString("targetData", targetData);
+        tag.putInt("logicMode", logicMode);
+        tag.putInt("outputType", outputType);
+        tag.putBoolean("isSoftOn", isSoftOn);
         tag.putInt("pulseDuration", pulseDuration);
         tag.putInt("signalStrength", signalStrength);
-        tag.putString("boardID", boardID);
         return tag;
     }
 
@@ -111,31 +117,34 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         BlockState state = getBlockState();
         boolean changed = false;
 
-        // 1. Calcular estado actual de cada pin (Bitmask)
-        int currentInputMask = 0;
-        for (Direction d : Direction.values()) {
-            EnumProperty<IOSide> prop = ArduinoIOBlock.getPropertyForDirection(d);
-            if (state.getValue(prop) == IOSide.INPUT) {
-                // Si llega energía por este lado, activamos su bit
-                if (level.getSignal(worldPosition.relative(d), d.getOpposite()) > 0) {
-                    currentInputMask |= (1 << d.ordinal());
-                }
+        // 1. Soft-OFF (Apagado por UI)
+        if (!isSoftOn) {
+            if (outputState) { outputState = false; changed = true; }
+            if (state.getValue(ArduinoIOBlock.ENABLED)) {
+                state = state.setValue(ArduinoIOBlock.ENABLED, false);
+                changed = true;
+            }
+            if (state.getValue(ArduinoIOBlock.BLINKING)) {
+                state = state.setValue(ArduinoIOBlock.BLINKING, false);
+                changed = true;
+            }
+            if (changed) {
+                level.setBlockAndUpdate(worldPosition, state);
+                level.updateNeighborsAt(worldPosition, state.getBlock());
+            }
+            return;
+        } else {
+            if (!state.getValue(ArduinoIOBlock.ENABLED)) {
+                state = state.setValue(ArduinoIOBlock.ENABLED, true);
+                changed = true;
             }
         }
 
-        // 2. Verificar si la placa está "ALIMENTADA" según el modo
-        boolean isEnabled = checkPowerLogic(state, currentInputMask);
-
-        if (isEnabled != state.getValue(ArduinoIOBlock.ENABLED)) {
-            state = state.setValue(ArduinoIOBlock.ENABLED, isEnabled);
-            changed = true;
-        }
-
-        // 3. Timers
+        // 2. Timer de Pulso (Solo cuenta hacia atrás, no apaga switches)
         if (pulseTimer > 0) {
             pulseTimer--;
-            if (pulseTimer == 0) {
-                state = state.setValue(ArduinoIOBlock.POWERED, false);
+            if (pulseTimer == 0 && outputType == 0) { // Fin del pulso
+                outputState = false;
                 changed = true;
             }
         }
@@ -147,107 +156,148 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             }
         }
 
+        // 3. Lógica Redstone (MC -> PC)
+        if (ioMode == 0 || ioMode == 2) {
+            boolean conditionMet = checkInputLogic(state);
+
+            // DETECCIÓN DE FLANCO DE SUBIDA (Rising Edge)
+            // Solo actuamos cuando la condición pasa de FALSO a VERDADERO.
+            if (conditionMet && !wasLogicMet) {
+
+                // A. Enviar Dato
+                sendSerialData();
+
+                // B. Feedback Físico (Pines Rojos)
+                if (outputType == 0) {
+                    // PULSO: Encender y poner timer
+                    outputState = true;
+                    pulseTimer = pulseDuration;
+                } else {
+                    // INTERRUPTOR: Alternar estado (Toggle)
+                    // No importa si la señal se apaga después, esto se queda así hasta el próximo trigger.
+                    outputState = !outputState;
+                }
+
+                // C. Feedback Visual
+                triggerBlink(state);
+                changed = true;
+            }
+
+            this.wasLogicMet = conditionMet;
+        }
+
         if (changed) {
             level.setBlockAndUpdate(worldPosition, state);
             level.updateNeighborsAt(worldPosition, state.getBlock());
         }
-
-        // 4. LÓGICA DE ENVÍO (Salida o Híbrido)
-        if (ioMode == 0 || ioMode == 2) {
-            // Solo si la placa está viva
-            if (isEnabled) {
-                // Detectar si ALGÚN pin nuevo se encendió (Rising Edge per pin)
-                // (current & ~last) > 0 significa que hay un bit en 1 ahora que antes era 0
-                boolean newActivation = (currentInputMask & ~lastInputMask) != 0;
-
-                // También enviar si la placa se acaba de encender por completo (Global Rising Edge)
-                boolean globalPowerOn = isEnabled && !wasPowered;
-
-                if (newActivation || globalPowerOn) {
-                    if (targetData != null && !targetData.isEmpty() && ownerUUID != null) {
-                        Player player = level.getPlayerByUUID(ownerUUID);
-                        if (player instanceof ServerPlayer serverPlayer) {
-                            ServerPlayNetworking.send(serverPlayer, new SerialCraft.SerialOutputPayload(targetData));
-                        }
-                    }
-                }
-            }
-            // Guardar estado para el siguiente tick
-            this.lastInputMask = currentInputMask;
-            this.wasPowered = isEnabled;
-        }
     }
 
-    // --- NUEVA LÓGICA DE ENERGÍA SEGÚN MODO ---
-    private boolean checkPowerLogic(BlockState state, int currentMask) {
-        int activeInputsCount = Integer.bitCount(currentMask);
-        int configuredInputsCount = 0;
+    private boolean checkInputLogic(BlockState state) {
+        int activeInputs = 0;
+        int configuredInputs = 0;
 
-        // Contar cuántos pines están configurados como verdes (INPUT)
         for (Direction d : Direction.values()) {
             EnumProperty<IOSide> prop = ArduinoIOBlock.getPropertyForDirection(d);
             if (state.getValue(prop) == IOSide.INPUT) {
-                configuredInputsCount++;
+                configuredInputs++;
+                if (level.getSignal(worldPosition.relative(d), d.getOpposite()) > 0) {
+                    activeInputs++;
+                }
             }
         }
 
-        // Si no hay pines de entrada, la placa tiene energía interna (USB)
-        if (configuredInputsCount == 0) return true;
+        if (configuredInputs == 0) return false;
 
-        // REGLAS ESPECÍFICAS:
-        if (ioMode == 1) {
-            // MODO ENTRADA: Lógica AND (Estricta)
-            // "Si hay dos o más, se requiere que TODOS estén alimentados"
-            return activeInputsCount == configuredInputsCount;
-        } else {
-            // MODO SALIDA / HÍBRIDO: Lógica OR (Flexible)
-            // "Encendida con solo un pin de energía"
-            return activeInputsCount > 0;
+        return switch (logicMode) {
+            case 0 -> activeInputs > 0; // OR
+            case 1 -> activeInputs == configuredInputs; // AND
+
+            // XOR: Usamos PARIDAD (Impar = True, Par = False)
+            // Si hay 1 activo -> 1 % 2 != 0 -> TRUE (Dispara)
+            // Si hay 2 activos -> 2 % 2 == 0 -> FALSE (No Dispara)
+            // Esto cumple tu requerimiento exacto.
+            case 2 -> (activeInputs % 2) != 0;
+
+            default -> false;
+        };
+    }
+
+    private void triggerBlink(BlockState state) {
+        if (!state.getValue(ArduinoIOBlock.BLINKING)) {
+            level.setBlockAndUpdate(worldPosition, state.setValue(ArduinoIOBlock.BLINKING, true));
+            blinkTimer = 5;
         }
     }
 
+    // --- ACCIÓN EXTERNA (Serial PC -> MC) ---
     public void triggerAction() {
-        if (level == null || level.isClientSide()) return;
+        if (level == null || level.isClientSide() || !isSoftOn) return;
+
         BlockState state = getBlockState();
         if (!state.is(ModBlocks.IO_BLOCK)) return;
 
-        // Seguridad: Si la placa no está alimentada, ignora al Arduino
-        if (!state.getValue(ArduinoIOBlock.ENABLED)) return;
-
-        boolean update = false;
-
-        if (!state.getValue(ArduinoIOBlock.BLINKING)) {
-            state = state.setValue(ArduinoIOBlock.BLINKING, true);
-            blinkTimer = 5;
-            update = true;
-        }
-
+        // Validar Condicionales en Modo Entrada
         if (ioMode == 1 || ioMode == 2) {
-            if (this.inputType == 1) {
-                if (!state.getValue(ArduinoIOBlock.POWERED)) {
-                    state = state.setValue(ArduinoIOBlock.POWERED, true);
-                    this.pulseTimer = this.pulseDuration;
-                    update = true;
-                }
-            } else {
-                boolean encendido = state.getValue(ArduinoIOBlock.POWERED);
-                state = state.setValue(ArduinoIOBlock.POWERED, !encendido);
-                update = true;
-            }
-        }
+            boolean hasInputPins = false;
+            for(Direction d : Direction.values()) if(state.getValue(ArduinoIOBlock.getPropertyForDirection(d)) == IOSide.INPUT) hasInputPins = true;
 
-        if (update) {
-            level.setBlockAndUpdate(worldPosition, state);
+            // Si hay pines y no se cumple la lógica, ignoramos el dato del Arduino
+            if (hasInputPins && !checkInputLogic(state)) return;
+
+            // Ejecutar Salida
+            if (outputType == 0) {
+                this.outputState = true;
+                this.pulseTimer = this.pulseDuration;
+            } else {
+                this.outputState = !this.outputState; // Toggle
+            }
+
+            triggerBlink(state);
             level.updateNeighborsAt(worldPosition, state.getBlock());
+            setChanged();
+        }
+    }
+
+    // --- CONFIGURACIÓN ---
+    public void setConfig(int mode, String data, int inputType, int pulseDuration, int signalStrength, String boardID, int logicMode, int outputType, boolean isSoftOn) {
+        // RESET IMPORTANTE: Evita que la placa se quede "pegada" al cambiar de modo
+        resetIO();
+
+        this.ioMode = mode;
+        this.targetData = (data == null) ? "" : data;
+        this.inputType = inputType;
+        this.pulseDuration = pulseDuration;
+        this.signalStrength = Math.max(1, Math.min(15, signalStrength));
+        this.boardID = (boardID == null || boardID.isEmpty()) ? "placa_gen" : boardID;
+        this.logicMode = logicMode;
+        this.outputType = outputType;
+        this.isSoftOn = isSoftOn;
+
+        setChanged();
+        if (level != null) {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, 3);
+            level.updateNeighborsAt(worldPosition, state.getBlock());
+        }
+    }
+
+    private void resetIO() {
+        this.outputState = false;
+        this.pulseTimer = 0;
+        this.blinkTimer = 0;
+        this.wasLogicMet = false;
+    }
+
+    private void sendSerialData() {
+        if (targetData != null && !targetData.isEmpty() && ownerUUID != null) {
+            Player p = level.getPlayerByUUID(ownerUUID);
+            if (p instanceof ServerPlayer sp) ServerPlayNetworking.send(sp, new SerialCraft.SerialOutputPayload(targetData));
         }
     }
 
     public void onButtonInteract(Player player, Direction btn, boolean isShift) {
         if (level == null || level.isClientSide()) return;
-        if (ownerUUID != null && !ownerUUID.equals(player.getUUID())) {
-            player.displayClientMessage(Component.literal("§cAcceso Denegado."), true);
-            return;
-        }
+        if (ownerUUID != null && !ownerUUID.equals(player.getUUID())) return;
 
         BlockState currentState = getBlockState();
         EnumProperty<IOSide> property = ArduinoIOBlock.getPropertyForDirection(btn);
@@ -256,43 +306,22 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
         if (isShift) {
             newState = (currentSideState == IOSide.OUTPUT) ? IOSide.NONE : IOSide.OUTPUT;
-            String msg = (newState == IOSide.OUTPUT) ? "§6[IO] Lado " + btn.getName() + ": SALIDA (Rojo)" : "§7[IO] Lado " + btn.getName() + ": Desconectado";
-            player.displayClientMessage(Component.literal(msg), true);
+            player.displayClientMessage(Component.literal((newState==IOSide.OUTPUT ? "§6[IO] Lado SALIDA" : "§7[IO] Desconectado")), true);
         } else {
             newState = (currentSideState == IOSide.INPUT) ? IOSide.NONE : IOSide.INPUT;
-            String msg = (newState == IOSide.INPUT) ? "§a[IO] Lado " + btn.getName() + ": ENTRADA (Verde)" : "§7[IO] Lado " + btn.getName() + ": Desconectado";
-            player.displayClientMessage(Component.literal(msg), true);
+            player.displayClientMessage(Component.literal((newState==IOSide.INPUT ? "§a[IO] Lado ENTRADA" : "§7[IO] Desconectado")), true);
         }
+
         BlockState nextState = currentState.setValue(property, newState);
         level.setBlockAndUpdate(worldPosition, nextState);
-        level.updateNeighborsAt(worldPosition, nextState.getBlock());
-    }
-
-    public void setConfig(int mode, String data, int inputType, int pulseDuration, int signalStrength, String boardID) {
-        this.ioMode = mode;
-        this.targetData = (data == null) ? "" : data;
-        this.inputType = inputType;
-        this.pulseDuration = pulseDuration;
-        this.signalStrength = Math.max(1, Math.min(15, signalStrength));
-        this.boardID = (boardID == null || boardID.isEmpty()) ? "placa_gen" : boardID;
-        setChanged();
-
-        if (level != null) {
-            BlockState state = getBlockState();
-            if (state.getValue(ArduinoIOBlock.MODE) != mode) {
-                level.setBlockAndUpdate(worldPosition, state.setValue(ArduinoIOBlock.MODE, mode));
-            } else {
-                level.sendBlockUpdated(worldPosition, state, state, 3);
-            }
-            level.updateNeighborsAt(worldPosition, state.getBlock());
-        }
+        // Recalcular lógica inmediata
+        this.wasLogicMet = checkInputLogic(nextState);
     }
 
     public void onPlayerInteract(Player player) {
         if (level == null || level.isClientSide()) return;
-        player.displayClientMessage(Component.literal("§e[IO] §fID: §b" + boardID + " §f| Power: §c" + signalStrength), true);
+        player.displayClientMessage(Component.literal("§e[IO] §fID: §b" + boardID + " §f| Power: " + (isSoftOn ? "§aON" : "§cOFF")), true);
     }
-
-    @Override public void setLevel(Level level) { super.setLevel(level); if (level != null && !level.isClientSide()) SerialCraft.activeIOBlocks.add(this); }
+    @Override public void setLevel(Level level) { super.setLevel(level); if(level != null && !level.isClientSide()) SerialCraft.activeIOBlocks.add(this); }
     @Override public void setRemoved() { super.setRemoved(); SerialCraft.activeIOBlocks.remove(this); }
 }
