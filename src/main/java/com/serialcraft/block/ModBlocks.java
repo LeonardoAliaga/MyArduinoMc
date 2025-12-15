@@ -43,7 +43,7 @@ public class ModBlocks {
             props -> new ArduinoIOBlock(
                     props.mapColor(MapColor.METAL)
                             .strength(3.0f)
-                            .noOcclusion() // <--- ¡ESTO ARREGLA EL SUELO TRANSPARENTE!
+                            .noOcclusion()
             ),
             BlockBehaviour.Properties.of()
     );

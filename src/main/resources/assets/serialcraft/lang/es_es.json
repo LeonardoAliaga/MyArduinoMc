@@ -2,5 +2,43 @@
   "block.serialcraft.connector_block": "Laptop Serial",
   "item.serialcraft.connector_block": "Laptop Serial",
   "block.serialcraft.io_block": "Placa IO",
-  "item.serialcraft.io_block": "Placa IO"
+  "item.serialcraft.io_block": "Placa IO",
+
+  "gui.serialcraft.connector.title": "Control Central (Laptop)",
+  "gui.serialcraft.connector.status": "Estado: %s",
+  "gui.serialcraft.connector.waiting": "Esperando...",
+  "gui.serialcraft.connector.port_label": "Puerto",
+  "gui.serialcraft.connector.btn_connect": "CONECTAR",
+  "gui.serialcraft.connector.btn_disconnect": "DESCONECTAR",
+  "gui.serialcraft.connector.boards_header": "Placas Detectadas:",
+  "gui.serialcraft.connector.no_boards": "No se encontraron placas activas.",
+
+  "gui.serialcraft.io.title": "Config IO",
+  "gui.serialcraft.io.label_id": "ID",
+  "gui.serialcraft.io.label_ticks": "Ticks",
+  "gui.serialcraft.io.label_power": "Fuerza",
+  "gui.serialcraft.io.label_data": "Data",
+  "gui.serialcraft.io.btn_save": "GUARDAR CONFIG",
+  "gui.serialcraft.io.sec_id": "Identificación & Energía",
+  "gui.serialcraft.io.sec_logic": "Lógica de Pines",
+  "gui.serialcraft.io.sec_serial": "Comunicación Serial",
+
+  "gui.serialcraft.mode.out": "SALIDA (PC->MC)",
+  "gui.serialcraft.mode.in": "ENTRADA (MC->PC)",
+  "gui.serialcraft.mode.hyb": "HÍBRIDO",
+
+  "gui.serialcraft.logic.or": "Lógica: OR (Alguno)",
+  "gui.serialcraft.logic.and": "Lógica: AND (Todos)",
+  "gui.serialcraft.logic.xor": "Lógica: XOR (Impar)",
+
+  "gui.serialcraft.output.pulse": "Salida: PULSO",
+  "gui.serialcraft.output.switch": "Salida: INTERRUPTOR",
+
+  "message.serialcraft.connecting": "Conectando...",
+  "message.serialcraft.connected": "Conectado a %s",
+  "message.serialcraft.disconnected": "Desconectado",
+  "message.serialcraft.already_connected": "Ya conectado",
+  "message.serialcraft.no_ports": "No hay puertos",
+  "message.serialcraft.port_not_found": "Puerto no encontrado: %s",
+  "message.serialcraft.error": "Error: %s"
 }

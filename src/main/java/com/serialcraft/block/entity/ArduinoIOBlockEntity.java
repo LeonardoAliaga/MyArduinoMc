@@ -4,12 +4,13 @@ import com.serialcraft.SerialCraft;
 import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.IOSide;
 import com.serialcraft.block.ModBlocks;
+import com.serialcraft.network.SerialOutputPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Component; // Necesario para textos traducibles
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -53,6 +54,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public void setOwner(UUID uuid) { this.ownerUUID = uuid; setChanged(); }
 
+    // --- PERSISTENCIA (Original) ---
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
@@ -110,14 +112,14 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    // --- LÓGICA PRINCIPAL ---
+    // --- LÓGICA PRINCIPAL (Intacta) ---
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
         BlockState state = getBlockState();
         boolean changed = false;
 
-        // 1. Soft-OFF (Apagado por UI)
+        // 1. Soft-OFF
         if (!isSoftOn) {
             if (outputState) { outputState = false; changed = true; }
             if (state.getValue(ArduinoIOBlock.ENABLED)) {
@@ -140,10 +142,10 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             }
         }
 
-        // 2. Timer de Pulso (Solo cuenta hacia atrás, no apaga switches)
+        // 2. Timers
         if (pulseTimer > 0) {
             pulseTimer--;
-            if (pulseTimer == 0 && outputType == 0) { // Fin del pulso
+            if (pulseTimer == 0 && outputType == 0) {
                 outputState = false;
                 changed = true;
             }
@@ -156,29 +158,20 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             }
         }
 
-        // 3. Lógica Redstone (MC -> PC)
+        // 3. Lógica Redstone
         if (ioMode == 0 || ioMode == 2) {
             boolean conditionMet = checkInputLogic(state);
 
-            // DETECCIÓN DE FLANCO DE SUBIDA (Rising Edge)
-            // Solo actuamos cuando la condición pasa de FALSO a VERDADERO.
             if (conditionMet && !wasLogicMet) {
-
-                // A. Enviar Dato
                 sendSerialData();
 
-                // B. Feedback Físico (Pines Rojos)
                 if (outputType == 0) {
-                    // PULSO: Encender y poner timer
                     outputState = true;
                     pulseTimer = pulseDuration;
                 } else {
-                    // INTERRUPTOR: Alternar estado (Toggle)
-                    // No importa si la señal se apaga después, esto se queda así hasta el próximo trigger.
                     outputState = !outputState;
                 }
 
-                // C. Feedback Visual
                 triggerBlink(state);
                 changed = true;
             }
@@ -209,15 +202,9 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         if (configuredInputs == 0) return false;
 
         return switch (logicMode) {
-            case 0 -> activeInputs > 0; // OR
-            case 1 -> activeInputs == configuredInputs; // AND
-
-            // XOR: Usamos PARIDAD (Impar = True, Par = False)
-            // Si hay 1 activo -> 1 % 2 != 0 -> TRUE (Dispara)
-            // Si hay 2 activos -> 2 % 2 == 0 -> FALSE (No Dispara)
-            // Esto cumple tu requerimiento exacto.
+            case 0 -> activeInputs > 0;
+            case 1 -> activeInputs == configuredInputs;
             case 2 -> (activeInputs % 2) != 0;
-
             default -> false;
         };
     }
@@ -236,20 +223,17 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         BlockState state = getBlockState();
         if (!state.is(ModBlocks.IO_BLOCK)) return;
 
-        // Validar Condicionales en Modo Entrada
         if (ioMode == 1 || ioMode == 2) {
             boolean hasInputPins = false;
             for(Direction d : Direction.values()) if(state.getValue(ArduinoIOBlock.getPropertyForDirection(d)) == IOSide.INPUT) hasInputPins = true;
 
-            // Si hay pines y no se cumple la lógica, ignoramos el dato del Arduino
             if (hasInputPins && !checkInputLogic(state)) return;
 
-            // Ejecutar Salida
             if (outputType == 0) {
                 this.outputState = true;
                 this.pulseTimer = this.pulseDuration;
             } else {
-                this.outputState = !this.outputState; // Toggle
+                this.outputState = !this.outputState;
             }
 
             triggerBlink(state);
@@ -260,7 +244,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     // --- CONFIGURACIÓN ---
     public void setConfig(int mode, String data, int inputType, int pulseDuration, int signalStrength, String boardID, int logicMode, int outputType, boolean isSoftOn) {
-        // RESET IMPORTANTE: Evita que la placa se quede "pegada" al cambiar de modo
         resetIO();
 
         this.ioMode = mode;
@@ -291,10 +274,13 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     private void sendSerialData() {
         if (targetData != null && !targetData.isEmpty() && ownerUUID != null) {
             Player p = level.getPlayerByUUID(ownerUUID);
-            if (p instanceof ServerPlayer sp) ServerPlayNetworking.send(sp, new SerialCraft.SerialOutputPayload(targetData));
+            if (p instanceof ServerPlayer sp) {
+                ServerPlayNetworking.send(sp, new SerialOutputPayload(targetData));
+            }
         }
     }
 
+    // --- INTERACCIÓN CON BOTONES (ADAPTADO A IDIOMA) ---
     public void onButtonInteract(Player player, Direction btn, boolean isShift) {
         if (level == null || level.isClientSide()) return;
         if (ownerUUID != null && !ownerUUID.equals(player.getUUID())) return;
@@ -303,25 +289,44 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         EnumProperty<IOSide> property = ArduinoIOBlock.getPropertyForDirection(btn);
         IOSide currentSideState = currentState.getValue(property);
         IOSide newState;
+        Component msg; // Mensaje traducible
 
         if (isShift) {
             newState = (currentSideState == IOSide.OUTPUT) ? IOSide.NONE : IOSide.OUTPUT;
-            player.displayClientMessage(Component.literal((newState==IOSide.OUTPUT ? "§6[IO] Lado SALIDA" : "§7[IO] Desconectado")), true);
+            // Usamos las claves del JSON
+            msg = (newState == IOSide.OUTPUT)
+                    ? Component.translatable("message.serialcraft.io_output")
+                    : Component.translatable("message.serialcraft.io_disconnected");
         } else {
             newState = (currentSideState == IOSide.INPUT) ? IOSide.NONE : IOSide.INPUT;
-            player.displayClientMessage(Component.literal((newState==IOSide.INPUT ? "§a[IO] Lado ENTRADA" : "§7[IO] Desconectado")), true);
+            msg = (newState == IOSide.INPUT)
+                    ? Component.translatable("message.serialcraft.io_input")
+                    : Component.translatable("message.serialcraft.io_disconnected");
         }
+
+        player.displayClientMessage(msg, true); // Enviar mensaje traducido
 
         BlockState nextState = currentState.setValue(property, newState);
         level.setBlockAndUpdate(worldPosition, nextState);
-        // Recalcular lógica inmediata
         this.wasLogicMet = checkInputLogic(nextState);
     }
 
+    // --- INTERACCIÓN PRINCIPAL (ADAPTADO A IDIOMA) ---
     public void onPlayerInteract(Player player) {
         if (level == null || level.isClientSide()) return;
-        player.displayClientMessage(Component.literal("§e[IO] §fID: §b" + boardID + " §f| Power: " + (isSoftOn ? "§aON" : "§cOFF")), true);
+
+        // Traducimos el estado ON/OFF
+        Component statusText = isSoftOn
+                ? Component.translatable("message.serialcraft.on")
+                : Component.translatable("message.serialcraft.off");
+
+        // Mensaje formateado: "ID: [id] | Power: [ON/OFF]"
+        player.displayClientMessage(
+                Component.translatable("message.serialcraft.io_status", this.boardID, statusText),
+                true
+        );
     }
+
     @Override public void setLevel(Level level) { super.setLevel(level); if(level != null && !level.isClientSide()) SerialCraft.activeIOBlocks.add(this); }
     @Override public void setRemoved() { super.setRemoved(); SerialCraft.activeIOBlocks.remove(this); }
 }

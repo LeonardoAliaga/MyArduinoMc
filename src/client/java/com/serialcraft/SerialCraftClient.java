@@ -4,6 +4,7 @@ import com.fazecast.jSerialComm.SerialPort;
 import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import com.serialcraft.network.*; // Importamos los nuevos Payloads
 import com.serialcraft.screen.ConnectorScreen;
 import com.serialcraft.screen.IOScreen;
 import net.fabricmc.api.ClientModInitializer;
@@ -24,6 +25,7 @@ public class SerialCraftClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        // EVENTO TICK: Lectura Serial -> Envío Packet al Server
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (arduinoPort != null && arduinoPort.isOpen() && arduinoPort.bytesAvailable() > 0) {
                 try {
@@ -31,18 +33,19 @@ public class SerialCraftClient implements ClientModInitializer {
                     arduinoPort.readBytes(buffer, buffer.length);
                     String mensaje = new String(buffer, StandardCharsets.UTF_8).trim();
                     if (!mensaje.isEmpty()) {
-                        ClientPlayNetworking.send(new SerialCraft.SerialInputPayload(mensaje));
+                        ClientPlayNetworking.send(new SerialInputPayload(mensaje));
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             }
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.SerialOutputPayload.TYPE, (payload, context) -> {
+        // HANDLER: SerialOutput (Server -> Cliente -> Arduino Físico)
+        ClientPlayNetworking.registerGlobalReceiver(SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> enviarArduinoLocal(payload.message()));
         });
 
-        // HANDLER LISTA
-        ClientPlayNetworking.registerGlobalReceiver(SerialCraft.BoardListResponsePayload.TYPE, (payload, context) -> {
+        // HANDLER: BoardListResponse (Actualizar la UI del Laptop)
+        ClientPlayNetworking.registerGlobalReceiver(BoardListResponsePayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 if (Minecraft.getInstance().screen instanceof ConnectorScreen screen) {
                     screen.updateBoardList(payload.boards());
@@ -50,6 +53,7 @@ public class SerialCraftClient implements ClientModInitializer {
             });
         });
 
+        // EVENTO: Interacción con Bloques (Abrir UI)
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             if (!level.isClientSide() || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 
@@ -57,20 +61,24 @@ public class SerialCraftClient implements ClientModInitializer {
             var state = level.getBlockState(pos);
             Minecraft mc = Minecraft.getInstance();
 
+            // Bloque Conector (Laptop)
             if (state.is(ModBlocks.CONNECTOR_BLOCK)) {
                 mc.setScreen(new ConnectorScreen(pos));
                 return InteractionResult.SUCCESS;
             }
 
+            // Bloque IO (Arduino)
             if (state.is(ModBlocks.IO_BLOCK)) {
                 if (state.getBlock() instanceof ArduinoIOBlock ioBlock) {
+                    // Calculamos click relativo para botones 3D
                     Vec3 hitPos = hit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());
-                    if (ioBlock.getHitButton(hitPos) != null) return InteractionResult.PASS;
+                    if (ioBlock.getHitButton(hitPos) != null) return InteractionResult.PASS; // Dejar pasar al bloque
                 }
 
                 int mode = 0;
                 String data = "";
                 var be = level.getBlockEntity(pos);
+
                 if (be instanceof ArduinoIOBlockEntity io) {
                     if (io.ownerUUID != null && !io.ownerUUID.equals(player.getUUID())) {
                         player.displayClientMessage(Component.literal("§cEsta placa pertenece a otro jugador."), true);
@@ -86,23 +94,31 @@ public class SerialCraftClient implements ClientModInitializer {
         });
     }
 
-    public static String conectar(String puerto) {
-        if (arduinoPort != null && arduinoPort.isOpen()) return "§eYa conectado";
+    // --- MÉTODOS SERIALES LOCALES ---
+
+    public static Component conectar(String puerto) {
+        if (arduinoPort != null && arduinoPort.isOpen())
+            return Component.translatable("message.serialcraft.already_connected");
+
         try {
             SerialPort[] ports = SerialPort.getCommPorts();
-            if (ports.length == 0) return "§cNo hay puertos";
+            if (ports.length == 0)
+                return Component.translatable("message.serialcraft.no_ports");
+
             for (SerialPort p : ports) {
                 if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
                     arduinoPort = p;
                     arduinoPort.setBaudRate(9600);
                     if (arduinoPort.openPort()) {
                         arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
-                        return "§aConectado a " + puerto;
+                        return Component.translatable("message.serialcraft.connected", puerto);
                     }
                 }
             }
-            return "§cPuerto no encontrado: " + puerto;
-        } catch (Exception e) { return "§4Error: " + e.getMessage(); }
+            return Component.translatable("message.serialcraft.port_not_found", puerto);
+        } catch (Exception e) {
+            return Component.translatable("message.serialcraft.error", e.getMessage());
+        }
     }
 
     public static void desconectar() {
@@ -114,7 +130,9 @@ public class SerialCraftClient implements ClientModInitializer {
 
     public static void enviarArduinoLocal(String msg) {
         if (arduinoPort != null && arduinoPort.isOpen()) {
-            try { arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1); } catch (Exception e) { e.printStackTrace(); }
+            try {
+                arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1);
+            } catch (Exception e) { e.printStackTrace(); }
         }
     }
 }

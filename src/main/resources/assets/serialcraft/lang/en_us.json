@@ -1,4 +1,44 @@
 {
-  "block.serialcraft.connector_block": "Serial Link",
-  "block.serialcraft.io_block": "Serial Node (IO)"
+  "block.serialcraft.connector_block": "Serial Laptop",
+  "item.serialcraft.connector_block": "Serial Laptop",
+  "block.serialcraft.io_block": "IO Board",
+  "item.serialcraft.io_block": "IO Board",
+
+  "gui.serialcraft.connector.title": "Central Control (Laptop)",
+  "gui.serialcraft.connector.status": "Status: %s",
+  "gui.serialcraft.connector.waiting": "Waiting...",
+  "gui.serialcraft.connector.port_label": "Port",
+  "gui.serialcraft.connector.btn_connect": "CONNECT",
+  "gui.serialcraft.connector.btn_disconnect": "DISCONNECT",
+  "gui.serialcraft.connector.boards_header": "Detected Boards:",
+  "gui.serialcraft.connector.no_boards": "No active boards found.",
+
+  "gui.serialcraft.io.title": "IO Config",
+  "gui.serialcraft.io.label_id": "ID",
+  "gui.serialcraft.io.label_ticks": "Ticks",
+  "gui.serialcraft.io.label_power": "Power",
+  "gui.serialcraft.io.label_data": "Data",
+  "gui.serialcraft.io.btn_save": "SAVE CONFIG",
+  "gui.serialcraft.io.sec_id": "ID & Power",
+  "gui.serialcraft.io.sec_logic": "Pin Logic",
+  "gui.serialcraft.io.sec_serial": "Serial Comm",
+
+  "gui.serialcraft.mode.out": "OUTPUT (PC->MC)",
+  "gui.serialcraft.mode.in": "INPUT (MC->PC)",
+  "gui.serialcraft.mode.hyb": "HYBRID",
+
+  "gui.serialcraft.logic.or": "Logic: OR (Any)",
+  "gui.serialcraft.logic.and": "Logic: AND (All)",
+  "gui.serialcraft.logic.xor": "Logic: XOR (Odd)",
+
+  "gui.serialcraft.output.pulse": "Output: PULSE",
+  "gui.serialcraft.output.switch": "Output: SWITCH",
+
+  "message.serialcraft.connecting": "Connecting...",
+  "message.serialcraft.connected": "Connected to %s",
+  "message.serialcraft.disconnected": "Disconnected",
+  "message.serialcraft.already_connected": "Already connected",
+  "message.serialcraft.no_ports": "No ports found",
+  "message.serialcraft.port_not_found": "Port not found: %s",
+  "message.serialcraft.error": "Error: %s"
 }

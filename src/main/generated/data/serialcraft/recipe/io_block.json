@@ -3,16 +3,16 @@
   "category": "redstone",
   "key": {
     "C": "minecraft:comparator",
-    "D": "minecraft:green_dye",
-    "G": "minecraft:gold_nugget",
-    "I": "minecraft:iron_nugget",
-    "R": "minecraft:redstone",
+    "D": "minecraft:redstone",
+    "I": "minecraft:iron_ingot",
+    "R": "minecraft:repeater",
+    "S": "minecraft:smooth_stone",
     "T": "minecraft:redstone_torch"
   },
   "pattern": [
-    "RTR",
-    "GCG",
-    "IDI"
+    "TRT",
+    "ICI",
+    "SDS"
   ],
   "result": {
     "count": 1,

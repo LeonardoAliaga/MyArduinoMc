@@ -32,7 +32,7 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
     public static final MapCodec<ConnectorBlock> CODEC = simpleCodec(ConnectorBlock::new);
     public static final BooleanProperty LIT = BooleanProperty.create("lit");
 
-    // Hitboxes (Sin cambios)
+    // Hitboxes
     private static final VoxelShape SHAPE_NORTH = Shapes.or(Block.box(1, 0, 1, 15, 1, 11), Block.box(1, 1, 11, 15, 10, 12));
     private static final VoxelShape SHAPE_SOUTH = Shapes.or(Block.box(1, 0, 5, 15, 1, 15), Block.box(1, 1, 4, 15, 10, 5));
     private static final VoxelShape SHAPE_WEST = Shapes.or(Block.box(1, 0, 1, 11, 1, 15), Block.box(11, 1, 1, 12, 10, 15));
@@ -44,8 +44,6 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
                 .setValue(FACING, Direction.NORTH)
                 .setValue(LIT, false));
     }
-
-    // --- NUEVO: Métodos de EntityBlock ---
 
     @Override
     public @Nullable BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
@@ -61,7 +59,6 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
         return null;
     }
 
-    // --- Fin Métodos Nuevos ---
 
     @Override
     public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {

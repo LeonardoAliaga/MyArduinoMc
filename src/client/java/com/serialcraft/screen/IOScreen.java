@@ -1,7 +1,7 @@
 package com.serialcraft.screen;
 
-import com.serialcraft.SerialCraft;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import com.serialcraft.network.ConfigPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -13,32 +13,29 @@ import net.minecraft.network.chat.Component;
 public class IOScreen extends Screen {
     private final BlockPos pos;
 
-    // Datos
     private int ioMode;
-    private int logicMode;   // Nuevo: AND/OR/XOR
-    private int outputType;  // Nuevo: Pulse/Switch
-    private boolean isSoftOn; // Nuevo: Power
+    private int logicMode;
+    private int outputType;
+    private boolean isSoftOn;
 
-    private int pulseDuration;
-    private int signalStrength;
-    private int inputType; // Legacy
-    private String boardID;
-    private String currentData;
+    private final int pulseDuration;
+    private final int signalStrength;
+    private final int inputType;
+    private final String boardID;
+    private final String currentData;
 
-    // Widgets
     private EditBox dataBox, idBox, durationBox, strengthBox;
-    private Button btnIoMode, btnLogic, btnOutput, btnPower, btnSave;
 
-    // Estilos
     private static final int BG_COLOR = 0xEE0A0A0A;
     private static final int TITLE_COLOR = 0xFF00E5FF;
     private static final int SECTION_COLOR = 0xFF55FFFF;
     private static final int TEXT_COLOR = 0xFFAAAAAA;
 
     public IOScreen(BlockPos pos, int mode, String data) {
-        super(Component.literal("Config IO"));
+        super(Component.translatable("gui.serialcraft.io.title"));
         this.pos = pos;
 
+        assert net.minecraft.client.Minecraft.getInstance().level != null;
         if (net.minecraft.client.Minecraft.getInstance().level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
             this.ioMode = io.ioMode;
             this.logicMode = io.logicMode;
@@ -50,7 +47,6 @@ public class IOScreen extends Screen {
             this.boardID = io.boardID;
             this.currentData = io.targetData;
         } else {
-            // Valores por defecto
             this.ioMode = mode;
             this.logicMode = 0;
             this.outputType = 0;
@@ -69,54 +65,49 @@ public class IOScreen extends Screen {
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // ID y Power (Parte superior)
-        idBox = new EditBox(font, x + 20, y + 40, 200, 18, Component.literal("ID"));
+        idBox = new EditBox(font, x + 20, y + 40, 200, 18, Component.translatable("gui.serialcraft.io.label_id"));
         idBox.setValue(this.boardID);
         addRenderableWidget(idBox);
 
-        btnPower = Button.builder(Component.literal(isSoftOn ? "§a[ON]" : "§c[OFF]"), b -> {
+        Button btnPower = Button.builder(Component.translatable(isSoftOn ? "message.serialcraft.on" : "message.serialcraft.off"), b -> {
             this.isSoftOn = !this.isSoftOn;
-            b.setMessage(Component.literal(isSoftOn ? "§a[ON]" : "§c[OFF]"));
+            b.setMessage(Component.translatable(isSoftOn ? "message.serialcraft.on" : "message.serialcraft.off"));
         }).bounds(x + 230, y + 39, 70, 20).build();
         addRenderableWidget(btnPower);
 
-        // Fila 1: Modo IO y Lógica de Entrada
-        btnIoMode = Button.builder(Component.literal(getIoModeText()), b -> {
+        Button btnIoMode = Button.builder(getIoModeText(), b -> {
             this.ioMode = (this.ioMode + 1) % 3;
-            b.setMessage(Component.literal(getIoModeText()));
+            b.setMessage(getIoModeText());
             refreshWidgets();
         }).bounds(x + 20, y + 85, 135, 20).build();
         addRenderableWidget(btnIoMode);
 
-        btnLogic = Button.builder(Component.literal(getLogicText()), b -> {
+        Button btnLogic = Button.builder(getLogicText(), b -> {
             this.logicMode = (this.logicMode + 1) % 3;
-            b.setMessage(Component.literal(getLogicText()));
+            b.setMessage(getLogicText());
         }).bounds(x + 165, y + 85, 135, 20).build();
         addRenderableWidget(btnLogic);
 
-        // Fila 2: Tipo de Salida y Valores Numéricos
-        btnOutput = Button.builder(Component.literal(getOutputText()), b -> {
+        Button btnOutput = Button.builder(getOutputText(), b -> {
             this.outputType = (this.outputType + 1) % 2;
-            b.setMessage(Component.literal(getOutputText()));
+            b.setMessage(getOutputText());
             refreshWidgets();
         }).bounds(x + 20, y + 120, 135, 20).build();
         addRenderableWidget(btnOutput);
 
-        durationBox = new EditBox(font, x + 165, y + 120, 60, 18, Component.literal("Ticks"));
+        durationBox = new EditBox(font, x + 165, y + 120, 60, 18, Component.translatable("gui.serialcraft.io.label_ticks"));
         durationBox.setValue(String.valueOf(this.pulseDuration));
         addRenderableWidget(durationBox);
 
-        strengthBox = new EditBox(font, x + 240, y + 120, 60, 18, Component.literal("Power"));
+        strengthBox = new EditBox(font, x + 240, y + 120, 60, 18, Component.translatable("gui.serialcraft.io.label_power"));
         strengthBox.setValue(String.valueOf(this.signalStrength));
         addRenderableWidget(strengthBox);
 
-        // Data Serial (Parte inferior)
-        dataBox = new EditBox(font, x + 20, y + 160, 280, 18, Component.literal("Data"));
+        dataBox = new EditBox(font, x + 20, y + 160, 280, 18, Component.translatable("gui.serialcraft.io.label_data"));
         dataBox.setValue(this.currentData);
         addRenderableWidget(dataBox);
 
-        // Guardar
-        btnSave = Button.builder(Component.literal("§l[ GUARDAR CONFIG ]"), b -> sendPacket())
+        Button btnSave = Button.builder(Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket())
                 .bounds(x + 100, y + 185, 120, 20).build();
         addRenderableWidget(btnSave);
 
@@ -124,78 +115,58 @@ public class IOScreen extends Screen {
     }
 
     private void refreshWidgets() {
-        // La duración (ticks) solo es relevante si estamos en modo PULSO (outputType 0)
         durationBox.visible = (outputType == 0);
-        // El botón de lógica solo es útil si hay pines de entrada (Modo 0, 2),
-        // pero lo dejamos visible para configurar previamente.
     }
 
-    private String getIoModeText() {
+    private Component getIoModeText() {
         return switch (ioMode) {
-            case 0 -> "§cDIR: SALIDA (PC->MC)";
-            case 1 -> "§aDIR: ENTRADA (MC->PC)";
-            case 2 -> "§9DIR: HÍBRIDO";
-            default -> "Error";
+            case 0 -> Component.translatable("gui.serialcraft.mode.out");
+            case 1 -> Component.translatable("gui.serialcraft.mode.in");
+            case 2 -> Component.translatable("gui.serialcraft.mode.hyb");
+            default -> Component.literal("Error");
         };
     }
 
-    private String getLogicText() {
+    private Component getLogicText() {
         return switch (logicMode) {
-            case 0 -> "Lógica: OR (Alguno)";
-            case 1 -> "Lógica: AND (Todos)";
-            case 2 -> "Lógica: XOR (Impar)";
-            default -> "Error";
+            case 0 -> Component.translatable("gui.serialcraft.logic.or");
+            case 1 -> Component.translatable("gui.serialcraft.logic.and");
+            case 2 -> Component.translatable("gui.serialcraft.logic.xor");
+            default -> Component.literal("Error");
         };
     }
 
-    private String getOutputText() {
-        return (outputType == 0) ? "Salida: PULSO" : "Salida: INTERRUPTOR";
+    private Component getOutputText() {
+        return (outputType == 0) ? Component.translatable("gui.serialcraft.output.pulse") : Component.translatable("gui.serialcraft.output.switch");
     }
 
     private void sendPacket() {
         int d = 10; try { d = Integer.parseInt(durationBox.getValue()); } catch(Exception ignored){}
         int s = 15; try { s = Integer.parseInt(strengthBox.getValue()); } catch(Exception ignored){}
-
-        // Enviar paquete actualizado con TODOS los campos
-        ClientPlayNetworking.send(new SerialCraft.ConfigPayload(
-                pos,
-                ioMode,
-                dataBox.getValue(),
-                inputType, // Mantenemos inputType por si acaso, aunque no lo editemos aquí
-                d,
-                s,
-                idBox.getValue(),
-                logicMode,   // Nuevo
-                outputType,  // Nuevo
-                isSoftOn     // Nuevo
-        ));
+        ClientPlayNetworking.send(new ConfigPayload(pos, ioMode, dataBox.getValue(), inputType, d, s, idBox.getValue(), logicMode, outputType, isSoftOn));
         this.onClose();
     }
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         this.renderTransparentBackground(gui);
-
         int w = 320; int h = 210;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // Fondo
         gui.fill(x, y, x + w, y + h, BG_COLOR);
-        gui.drawCenteredString(font, "§lPANEL DE CONTROL SERIAL", this.width / 2, y + 10, TITLE_COLOR);
+        gui.drawCenteredString(font, this.title, this.width / 2, y + 10, TITLE_COLOR);
 
-        // Etiquetas
-        gui.drawString(font, "Identificación & Energía", x + 20, y + 28, SECTION_COLOR, false);
-        gui.drawString(font, "Lógica de Pines (Entrada -> Salida)", x + 20, y + 72, SECTION_COLOR, false);
-        gui.drawString(font, "Comunicación Serial", x + 20, y + 148, SECTION_COLOR, false);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.sec_id"), x + 20, y + 28, SECTION_COLOR, false);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.sec_logic"), x + 20, y + 72, SECTION_COLOR, false);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.sec_serial"), x + 20, y + 148, SECTION_COLOR, false);
 
         if(durationBox.visible) {
-            gui.drawString(font, "Ticks", x + 165, y + 110, TEXT_COLOR, false);
+            gui.drawString(font, Component.translatable("gui.serialcraft.io.label_ticks"), x + 165, y + 110, TEXT_COLOR, false);
         }
-        gui.drawString(font, "Fuerza", x + 240, y + 110, TEXT_COLOR, false);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_power"), x + 240, y + 110, TEXT_COLOR, false);
 
         super.render(gui, mouseX, mouseY, partialTick);
     }
-
     @Override public boolean isPauseScreen() { return false; }
 }

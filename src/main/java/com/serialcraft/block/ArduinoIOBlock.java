@@ -3,7 +3,7 @@ package com.serialcraft.block;
 import com.mojang.serialization.MapCodec;
 import com.serialcraft.SerialCraft;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
-import com.serialcraft.block.entity.ModBlockEntities; // Asegúrate de importar tu clase correcta
+import com.serialcraft.block.entity.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -40,7 +40,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     public static final MapCodec<ArduinoIOBlock> CODEC = simpleCodec(ArduinoIOBlock::new);
 
-    // Propiedades originales (necesarias para tus modelos JSON y texturas)
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
     public static final BooleanProperty ENABLED = BooleanProperty.create("enabled");
     public static final BooleanProperty BLINKING = BooleanProperty.create("blinking");
@@ -53,7 +52,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final EnumProperty<IOSide> UP = EnumProperty.create("up", IOSide.class);
     public static final EnumProperty<IOSide> DOWN = EnumProperty.create("down", IOSide.class);
 
-    // Hitboxes (Copiadas exactas de tu original para que los botones funcionen igual)
+    // Hitboxes
     private static final VoxelShape SHAPE_BASE = Shapes.or(
             Block.box(0, 0, 0, 16, 2, 16),
             Block.box(7, 2, 0, 9, 6, 2.5),
@@ -72,7 +71,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         super(settings);
         this.registerDefaultState(this.stateDefinition.any()
                 .setValue(POWERED, false)
-                .setValue(ENABLED, false) // Originalmente false, la entidad lo pondrá en true si isSoftOn=true
+                .setValue(ENABLED, false)
                 .setValue(BLINKING, false)
                 .setValue(MODE, 0)
                 .setValue(NORTH, IOSide.NONE).setValue(SOUTH, IOSide.NONE)
@@ -138,9 +137,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         if (ioState == IOSide.OUTPUT) {
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
 
-                // --- CAMBIO PRINCIPAL AQUÍ ---
-                // En lugar del switch(MODE) antiguo, usamos la nueva lógica de la entidad.
-
                 // 1. Si está apagado por software (Botón UI), cortamos energía.
                 if (!io.isSoftOn) return 0;
 
@@ -171,12 +167,12 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     @NotNull @Override public MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new ArduinoIOBlockEntity(pos, state); }
     @NotNull @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
-    @Override public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPE_BASE; }
+    @Override public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPE_BASE; }
 
     @Override public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {}
 
     // Importante mantener esto para que la lista de placas activas se limpie al romper el bloque
-    @Override public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    @Override public @NotNull BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide()) {
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) SerialCraft.activeIOBlocks.remove(io);
         }
@@ -184,7 +180,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     }
 
     @Nullable @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Asegúrate de usar tu referencia correcta a ModBlockEntities.IO_BLOCK_ENTITY
         if (type == ModBlockEntities.IO_BLOCK_ENTITY) {
             return (lvl, p, st, be) -> { if (!lvl.isClientSide() && be instanceof ArduinoIOBlockEntity io) io.tickServer(); };
         }
