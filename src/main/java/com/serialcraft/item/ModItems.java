@@ -16,6 +16,7 @@ import java.util.function.Function;
 
 public class ModItems {
 
+    // Helper para registrar items (se mantiene igual)
     private static Item register(String name,
                                  Function<Item.Properties, Item> itemFactory,
                                  Item.Properties settings) {
@@ -30,25 +31,23 @@ public class ModItems {
         return Registry.register(BuiltInRegistries.ITEM, itemKey, item);
     }
 
-    public static final Item CONNECTOR_BLOCK_ITEM;
-    public static final Item IO_BLOCK_ITEM;
+    // --- AQUÍ ESTÁ EL CAMBIO ---
+    // Inicialización directa (sin bloque static {})
 
-    static {
-        CONNECTOR_BLOCK_ITEM = register(
-                "connector_block",
-                props -> new BlockItem(ModBlocks.CONNECTOR_BLOCK, props),
-                new Item.Properties()
-        );
+    public static final Item CONNECTOR_BLOCK_ITEM = register(
+            "connector_block",
+            props -> new BlockItem(ModBlocks.CONNECTOR_BLOCK, props),
+            new Item.Properties()
+    );
 
-        IO_BLOCK_ITEM = register(
-                "io_block",
-                props -> new BlockItem(ModBlocks.IO_BLOCK, props),
-                new Item.Properties()
-        );
-    }
+    public static final Item IO_BLOCK_ITEM = register(
+            "io_block",
+            props -> new BlockItem(ModBlocks.IO_BLOCK, props),
+            new Item.Properties()
+    );
 
+    // Inicialización de grupos creativos
     public static void initialize() {
-        // Añadir a la pestaña de redstone
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.REDSTONE_BLOCKS)
                 .register(entries -> {
                     entries.accept(CONNECTOR_BLOCK_ITEM);
