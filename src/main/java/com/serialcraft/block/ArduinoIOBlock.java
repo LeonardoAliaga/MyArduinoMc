@@ -43,6 +43,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
     public static final BooleanProperty ENABLED = BooleanProperty.create("enabled");
     public static final BooleanProperty BLINKING = BooleanProperty.create("blinking");
+    // MODE se usa visualmente, pero la lógica real está en el TileEntity
     public static final IntegerProperty MODE = IntegerProperty.create("mode", 0, 2);
 
     public static final EnumProperty<IOSide> NORTH = EnumProperty.create("north", IOSide.class);
@@ -52,7 +53,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final EnumProperty<IOSide> UP = EnumProperty.create("up", IOSide.class);
     public static final EnumProperty<IOSide> DOWN = EnumProperty.create("down", IOSide.class);
 
-    // Hitboxes
+    // Hitboxes precisas para los conectores
     private static final VoxelShape SHAPE_BASE = Shapes.or(
             Block.box(0, 0, 0, 16, 2, 16),
             Block.box(7, 2, 0, 9, 6, 2.5),
@@ -61,6 +62,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
             Block.box(0, 2, 7, 2.5, 6, 9)
     );
 
+    // Áreas de interacción para los botones físicos (cables)
     private static final AABB BTN_NORTE = new AABB(7/16d, 2/16d, 0/16d, 9/16d, 6/16d, 2.475/16d);
     private static final AABB BTN_SUR   = new AABB(7/16d, 2/16d, 13.575/16d, 9/16d, 6/16d, 16/16d);
     private static final AABB BTN_ESTE  = new AABB(13.6/16d, 2/16d, 7/16d, 16/16d, 6/16d, 9/16d);
@@ -79,7 +81,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
                 .setValue(UP, IOSide.NONE).setValue(DOWN, IOSide.NONE));
     }
 
-    // Cálculo de hitbox para saber qué botón se presionó
     public Direction getHitButton(Vec3 localHit) {
         double margin = 0.03;
         if (BTN_NORTE.inflate(margin).contains(localHit)) return Direction.NORTH;
@@ -102,10 +103,38 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         Direction btn = getHitButton(hitPos);
 
         if (btn != null) {
-            // Interactuar con los botones físicos (Cables)
-            io.onButtonInteract(player, btn, player.isShiftKeyDown());
+            // --- LÓGICA DE CONEXIÓN FÍSICA ---
+            // Al hacer clic en un conector, cambiamos su estado basándonos en el MODO GLOBAL de la placa.
+            // Si la placa está en MODO ENTRADA (Arduino->MC), el conector se pone en INPUT.
+            // Si la placa está en MODO SALIDA (MC->Arduino), el conector se pone en OUTPUT.
+
+            EnumProperty<IOSide> property = getPropertyForDirection(btn);
+            IOSide currentSideState = state.getValue(property);
+
+            IOSide targetState;
+            // Si ya está conectado, lo desconectamos (NONE)
+            if (currentSideState != IOSide.NONE) {
+                targetState = IOSide.NONE;
+                player.displayClientMessage(Component.translatable("message.serialcraft.io_disconnected"), true);
+            } else {
+                // Si está desconectado, lo conectamos según el modo global de la entidad
+                if (io.ioMode == ArduinoIOBlockEntity.MODE_INPUT) {
+                    targetState = IOSide.INPUT; // El bloque recibe señal del Arduino y la emite por aquí
+                    player.displayClientMessage(Component.translatable("message.serialcraft.io_input"), true);
+                } else {
+                    targetState = IOSide.OUTPUT; // El bloque lee redstone de aquí y la manda al Arduino
+                    player.displayClientMessage(Component.translatable("message.serialcraft.io_output"), true);
+                }
+            }
+
+            BlockState newState = state.setValue(property, targetState);
+            level.setBlockAndUpdate(pos, newState);
+
+            // Actualizamos vecinos para que la redstone reaccione al cambio de conexión
+            level.updateNeighborsAt(pos, this);
+
         } else {
-            // Interactuar con la placa (GUI / Info)
+            // --- INTERACCIÓN CON LA PLACA (Abrir GUI) ---
             io.onPlayerInteract(player);
         }
         return InteractionResult.SUCCESS;
@@ -118,7 +147,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ArduinoIOBlockEntity ioEntity) {
                 ioEntity.setOwner(player.getUUID());
-                player.displayClientMessage(Component.literal("§7[SerialCraft] Placa vinculada a: " + player.getName().getString()), true);
+                player.displayClientMessage(Component.literal("§7[SerialCraft] Vinculado a: " + player.getName().getString()), true);
             }
         }
     }
@@ -128,21 +157,19 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        // Lado del bloque opuesto a la cara del vecino
-        Direction side = direction.getOpposite();
+        // Redstone que emite el bloque hacia sus vecinos
+        Direction side = direction.getOpposite(); // El lado del bloque que toca al vecino
         EnumProperty<IOSide> property = getPropertyForDirection(side);
         IOSide ioState = state.getValue(property);
 
-        // Solo emitimos energía si el lado es SALIDA (Rojo)
-        if (ioState == IOSide.OUTPUT) {
+        // IMPORTANTE: En la nueva lógica simplificada, solo emitimos energía si:
+        // 1. El lado está configurado visualmente como INPUT (Salida de señal hacia el mundo) o genérico.
+        //    (Nota: Tu enum IOSide tiene INPUT/OUTPUT. Si el Arduino MANDA señal (Modo Input),
+        //    el bloque actúa como FUENTE, por lo tanto el lado debe ser IOSide.INPUT según la lógica anterior).
+        if (ioState == IOSide.INPUT) {
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
-
-                // 1. Si está apagado por software (Botón UI), cortamos energía.
-                if (!io.isSoftOn) return 0;
-
-                // 2. Si está encendido, emitimos solo si la lógica de la entidad (outputState) dice que sí.
-                // (outputState ya calcula los pulsos, confirmaciones y toggles).
-                return io.outputState ? io.signalStrength : 0;
+                // Usamos el nuevo método centralizado de la entidad
+                return io.getRedstoneSignal();
             }
         }
         return 0;
@@ -171,7 +198,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
     @Override public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {}
 
-    // Importante mantener esto para que la lista de placas activas se limpie al romper el bloque
     @Override public @NotNull BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide()) {
             if (level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) SerialCraft.activeIOBlocks.remove(io);

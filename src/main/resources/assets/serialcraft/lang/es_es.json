@@ -40,5 +40,9 @@
   "message.serialcraft.already_connected": "Ya conectado",
   "message.serialcraft.no_ports": "No hay puertos",
   "message.serialcraft.port_not_found": "Puerto no encontrado: %s",
-  "message.serialcraft.error": "Error: %s"
+  "message.serialcraft.error": "Error: %s",
+
+  "gui.serialcraft.analog_btn": "Analógico: %s",
+  "gui.serialcraft.prefix_label": "Prefijo",
+  "message.serialcraft.analog_suffix": " [Analógico: %s]"
 }

@@ -13,72 +13,40 @@ import java.util.List;
 
 public class ModNetworking {
 
-    // 1. Registrar los TIPOS de paquetes (Común para Cliente y Servidor)
     public static void registerPayloads() {
-        // C2S: Cliente a Servidor
+        // C2S
         PayloadTypeRegistry.playC2S().register(ConfigPayload.TYPE, ConfigPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ConnectorPayload.TYPE, ConnectorPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(SerialInputPayload.TYPE, SerialInputPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoardListRequestPayload.TYPE, BoardListRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RemoteTogglePayload.TYPE, RemoteTogglePayload.CODEC);
 
-        // S2C: Servidor a Cliente
+        // S2C
         PayloadTypeRegistry.playS2C().register(SerialOutputPayload.TYPE, SerialOutputPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoardListResponsePayload.TYPE, BoardListResponsePayload.CODEC);
     }
 
-    // 2. Registrar la LÓGICA del Servidor (Qué pasa cuando recibes el paquete)
     public static void registerServerHandlers() {
 
-        // --- Configuración de la Placa ---
+        // --- Configuración Principal ---
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos()) instanceof ArduinoIOBlockEntity entity) {
-                    if (entity.ownerUUID != null && entity.ownerUUID.equals(context.player().getUUID())) {
-                        entity.setConfig(
-                                payload.mode(), payload.data(), payload.inputType(),
-                                payload.pulseDuration(), payload.signalStrength(),
-                                payload.boardID(), payload.logicMode(),
-                                payload.outputType(), payload.isSoftOn()
+                    if (entity.ownerUUID == null || entity.ownerUUID.equals(context.player().getUUID())) {
+                        entity.updateConfig(
+                                payload.mode(),
+                                payload.targetData(), // Ahora pasamos el String
+                                payload.signalType(),
+                                payload.isSoftOn(),
+                                payload.boardID(),
+                                payload.pulseDuration()
                         );
                     }
                 }
             });
         });
 
-        // --- Toggle Remoto (Laptop) ---
-        ServerPlayNetworking.registerGlobalReceiver(RemoteTogglePayload.TYPE, (payload, context) -> {
-            context.server().execute(() -> {
-                if (context.player().level().getBlockEntity(payload.targetPos()) instanceof ArduinoIOBlockEntity io) {
-                    if (io.ownerUUID != null && io.ownerUUID.equals(context.player().getUUID())) {
-                        io.setConfig(io.ioMode, io.targetData, io.inputType, io.pulseDuration,
-                                io.signalStrength, io.boardID, io.logicMode,
-                                io.outputType, !io.isSoftOn);
-                    }
-                }
-            });
-        });
-
-        // --- Solicitud de Lista de Placas ---
-        ServerPlayNetworking.registerGlobalReceiver(BoardListRequestPayload.TYPE, (payload, context) -> {
-            ServerPlayer player = context.player();
-            context.server().execute(() -> {
-                List<BoardInfo> boardInfos = new ArrayList<>();
-                synchronized (SerialCraft.activeIOBlocks) { // Accedemos a la lista estática de la clase principal
-                    for (ArduinoIOBlockEntity io : SerialCraft.activeIOBlocks) {
-                        if (io.ownerUUID != null && io.ownerUUID.equals(player.getUUID())) {
-                            boardInfos.add(new BoardInfo(
-                                    io.getBlockPos(), io.boardID, io.targetData,
-                                    io.ioMode, io.isSoftOn
-                            ));
-                        }
-                    }
-                }
-                ServerPlayNetworking.send(player, new BoardListResponsePayload(boardInfos));
-            });
-        });
-
-        // --- Actualización Visual Conector ---
+        // --- Connector ---
         ServerPlayNetworking.registerGlobalReceiver(ConnectorPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 var level = context.player().level();
@@ -89,16 +57,45 @@ public class ModNetworking {
             });
         });
 
-        // --- Input Serial ---
+        // --- Input Serial (Arduino -> MC) ---
         ServerPlayNetworking.registerGlobalReceiver(SerialInputPayload.TYPE, (payload, context) -> {
             ServerPlayer sender = context.player();
             context.server().execute(() -> {
+                String msg = payload.message();
+                // Buscamos bloques que coincidan con el mensaje recibido
                 synchronized (SerialCraft.activeIOBlocks) {
                     for (ArduinoIOBlockEntity io : SerialCraft.activeIOBlocks) {
-                        if (io.targetData.equals(payload.message()) && io.ownerUUID != null && io.ownerUUID.equals(sender.getUUID())) {
-                            io.triggerAction();
+                        if (io.ownerUUID != null && io.ownerUUID.equals(sender.getUUID())) {
+                            io.processSerialInput(msg);
                         }
                     }
+                }
+            });
+        });
+
+        // --- Lista de Placas ---
+        ServerPlayNetworking.registerGlobalReceiver(BoardListRequestPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            context.server().execute(() -> {
+                List<BoardInfo> boardInfos = new ArrayList<>();
+                synchronized (SerialCraft.activeIOBlocks) {
+                    for (ArduinoIOBlockEntity io : SerialCraft.activeIOBlocks) {
+                        if (io.ownerUUID != null && io.ownerUUID.equals(player.getUUID())) {
+                            // Mostramos el ID del canal en la lista
+                            boardInfos.add(new BoardInfo(io.getBlockPos(), io.boardID, io.targetData, io.ioMode, io.isSoftOn));
+                        }
+                    }
+                }
+                ServerPlayNetworking.send(player, new BoardListResponsePayload(boardInfos));
+            });
+        });
+
+        // --- Toggle Remoto ---
+        ServerPlayNetworking.registerGlobalReceiver(RemoteTogglePayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                if (context.player().level().getBlockEntity(payload.targetPos()) instanceof ArduinoIOBlockEntity io) {
+                    // Toggle simple del estado SoftOn
+                    io.updateConfig(io.ioMode, io.targetData, io.signalType, !io.isSoftOn, io.boardID, io.pulseDuration);
                 }
             });
         });

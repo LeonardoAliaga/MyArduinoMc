@@ -19,17 +19,17 @@ import java.util.List;
 public class ConnectorScreen extends Screen {
     private final BlockPos pos;
     private EditBox portBox;
-    private Component statusText; // Ahora usamos Component para el estado
+    private Component statusText;
 
     private List<BoardInfo> boardList = new ArrayList<>();
     private final List<Button> boardButtons = new ArrayList<>();
 
+    // Colores modernos
     private static final int BG_COLOR = 0xE6101010;
     private static final int TITLE_COLOR = 0xFF00E5FF;
     private static final int SECTION_COLOR = 0xFF55FFFF;
 
     public ConnectorScreen(BlockPos pos) {
-        // Título traducible
         super(Component.translatable("gui.serialcraft.connector.title"));
         this.pos = pos;
         this.statusText = Component.translatable("gui.serialcraft.connector.waiting");
@@ -39,6 +39,7 @@ public class ConnectorScreen extends Screen {
     protected void init() {
         boolean isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
 
+        // Solicitamos estado actual y lista de placas
         ClientPlayNetworking.send(new ConnectorPayload(this.pos, isConnected));
         ClientPlayNetworking.send(new BoardListRequestPayload(true));
 
@@ -48,7 +49,7 @@ public class ConnectorScreen extends Screen {
 
         String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM3";
 
-        // Etiqueta del puerto traducida
+        // Input del Puerto COM
         this.portBox = new EditBox(this.font, x + 20, y + 40, 200, 20, Component.translatable("gui.serialcraft.connector.port_label"));
         this.portBox.setMaxLength(32);
         this.portBox.setBordered(true);
@@ -57,6 +58,7 @@ public class ConnectorScreen extends Screen {
             this.statusText = Component.translatable("message.serialcraft.connected", SerialCraftClient.arduinoPort.getSystemPortName());
         } else {
             this.portBox.setValue(oldPort);
+            this.statusText = Component.translatable("message.serialcraft.disconnected");
         }
         this.addRenderableWidget(this.portBox);
 
@@ -64,12 +66,10 @@ public class ConnectorScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.translatable("gui.serialcraft.connector.btn_connect"), b -> {
             this.statusText = Component.translatable("message.serialcraft.connecting");
 
-            // Llamamos a conectar y recibimos un Component (ver SerialCraftClient modificado abajo)
+            // Usamos tu método existente para conectar
             Component res = SerialCraftClient.conectar(portBox.getValue().trim());
             this.statusText = res;
 
-            // Verificamos el contenido del mensaje (esto es un poco hacky para componentes, pero funcional para tu lógica)
-            // Idealmente conectar() devolvería un booleano o enum
             if (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen()) {
                 ClientPlayNetworking.send(new ConnectorPayload(this.pos, true));
             }
@@ -91,6 +91,7 @@ public class ConnectorScreen extends Screen {
     }
 
     private void refreshBoardListWidgets() {
+        // Limpiar botones antiguos para evitar duplicados al refrescar
         for (Button btn : boardButtons) this.removeWidget(btn);
         boardButtons.clear();
 
@@ -101,7 +102,8 @@ public class ConnectorScreen extends Screen {
 
         for (BoardInfo info : boardList) {
             if (listY > y + h - 20) break;
-            // Botones ON/OFF usan las claves globales
+
+            // Botón Toggle Remoto (ON/OFF) para cada placa
             Button toggleBtn = Button.builder(Component.translatable(info.status() ? "message.serialcraft.on" : "message.serialcraft.off"), b -> {
                 ClientPlayNetworking.send(new RemoteTogglePayload(info.pos()));
             }).bounds(x + 270, listY - 3, 50, 16).build();
@@ -122,11 +124,12 @@ public class ConnectorScreen extends Screen {
         gui.fill(x, y, x + w, y + h, BG_COLOR);
         gui.drawCenteredString(this.font, this.title, this.width / 2, y + 10, TITLE_COLOR);
 
-        // Renderizamos el Componente de estado
+        // Estado
         gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.status", statusText), x + 20, y + 70, 0xFFFFFFFF, false);
 
+        // Header Lista
         gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.boards_header"), x + 20, y + 95, SECTION_COLOR, false);
-        gui.fill(x + 20, y + 110, x + w - 20, y + h - 10, 0x88000000);
+        gui.fill(x + 20, y + 110, x + w - 20, y + 111, 0xFF555555); // Línea separadora
 
         int listY = y + 115;
         if (boardList.isEmpty()) {
@@ -134,24 +137,23 @@ public class ConnectorScreen extends Screen {
         } else {
             for (BoardInfo info : boardList) {
                 if (listY > y + h - 20) break;
-                // Modos traducidos cortos
-                String modeKey = switch(info.mode()) {
-                    case 0 -> "gui.serialcraft.mode.out"; // Deberías agregar versiones cortas si prefieres (SAL/ENT)
-                    case 1 -> "gui.serialcraft.mode.in";
-                    default -> "gui.serialcraft.mode.hyb";
-                };
 
-                // Construcción manual de la línea para mezclar texto plano y traducido
-                // "ID | Data | MODO"
-                String display = "§b" + info.id() + " §7| §f" + info.data() + " §7| ";
+                String modeKey = (info.mode() == 0) ? "gui.serialcraft.mode.out" : "gui.serialcraft.mode.in";
+
+                // Formato: "ID | COMANDO | [MODO]"
+                // info.id() = ID Placa (ej: Arduino_1)
+                // info.data() = ID Comando (ej: LUZ_SALA)
+                String display = "§b" + info.id() + " §7> §f" + info.data() + " §7";
                 gui.drawString(this.font, display, x + 25, listY, 0xFFFFFFFF, false);
-                // Dibujamos el modo traducido justo después (calculando el ancho)
-                gui.drawString(this.font, Component.translatable(modeKey), x + 25 + this.font.width(display), listY, 0xFFFFFFFF, false);
+
+                int widthOffset = this.font.width(display) + 30;
+                gui.drawString(this.font, Component.translatable(modeKey), x + widthOffset, listY, 0xFFFFFF55, false);
 
                 listY += 18;
             }
         }
         super.render(gui, mouseX, mouseY, partialTick);
     }
+
     @Override public boolean isPauseScreen() { return false; }
 }
