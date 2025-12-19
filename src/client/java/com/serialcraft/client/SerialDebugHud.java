@@ -89,8 +89,8 @@ public class SerialDebugHud implements HudRenderCallback {
                 guiGraphics.drawString(font, modeStr, cx, textY, modeColor, true);
                 textY += 10;
 
-                // SEÑAL
-                boolean isAnalog = (io.signalType == ArduinoIOBlockEntity.SIGNAL_ANALOG);
+                // SEÑAL (Corrección: Usamos 1 directamente en lugar de SIGNAL_ANALOG)
+                boolean isAnalog = (io.signalType == 1); // 1 = Analog
                 String signalStr = isAnalog ? "ANALOG (PWM)" : "DIGITAL (I/O)";
                 guiGraphics.drawString(font, signalStr, cx, textY, isAnalog ? 0xFFFF55FF : 0xFF55FF55, true);
                 textY += 10;

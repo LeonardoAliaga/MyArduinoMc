@@ -11,12 +11,13 @@ import org.jetbrains.annotations.NotNull;
 
 public record ConfigPayload(
         BlockPos pos,
-        int mode,           // 0=OUTPUT, 1=INPUT
-        String targetData,  // El ID/Texto clave (Ej: "LUZ_SALA")
-        int signalType,     // 0=DIGITAL, 1=ANALOG
+        int mode,
+        String targetData,
+        int signalType,
         boolean isSoftOn,
         String boardID,
-        int pulseDuration
+        int pulseDuration,
+        int logicMode       // Nuevo campo
 ) implements CustomPacketPayload {
 
     public static final Type<ConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "config_packet"));
@@ -30,6 +31,7 @@ public record ConfigPayload(
                 b.writeBoolean(v.isSoftOn);
                 ByteBufCodecs.STRING_UTF8.encode(b, v.boardID);
                 b.writeInt(v.pulseDuration);
+                b.writeInt(v.logicMode);
             },
             b -> new ConfigPayload(
                     BlockPos.STREAM_CODEC.decode(b),
@@ -38,6 +40,7 @@ public record ConfigPayload(
                     b.readInt(),
                     b.readBoolean(),
                     ByteBufCodecs.STRING_UTF8.decode(b),
+                    b.readInt(),
                     b.readInt()
             )
     );
