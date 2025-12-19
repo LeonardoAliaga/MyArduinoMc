@@ -4,6 +4,7 @@ import com.serialcraft.SerialCraft;
 import com.serialcraft.block.ConnectorBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents; // IMPORTANTE
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,6 +25,11 @@ public class ModNetworking {
     }
 
     public static void registerServerHandlers() {
+        // --- 2. LIMPIEZA DE LISTA POR MUNDO ---
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            SerialCraft.activeIOBlocks.clear();
+        });
+
         // Configuración Principal
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {

@@ -26,7 +26,6 @@ import java.util.UUID;
 
 public class ArduinoIOBlockEntity extends BlockEntity {
 
-    // --- CONSTANTES ---
     public static final int MODE_OUTPUT = 0; // MC -> Ard
     public static final int MODE_INPUT = 1;  // Ard -> MC
 
@@ -37,7 +36,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public static final int LOGIC_AND = 1;
     public static final int LOGIC_XOR = 2;
 
-    // --- CONFIGURACIÓN ---
     public int ioMode = MODE_OUTPUT;
     public int signalType = SIGNAL_DIGITAL;
     public String targetData = "cmd_1";
@@ -48,10 +46,12 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public UUID ownerUUID = null;
 
-    // --- ESTADO INTERNO ---
     private int currentRedstoneOutput = 0;
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
+
+    // OPTIMIZACIÓN: Rate Limiting
+    private long lastUpdateTick = 0;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
@@ -59,11 +59,9 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public void setOwner(UUID uuid) { this.ownerUUID = uuid; setChanged(); }
 
-    // --- TICK DEL SERVIDOR ---
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
-        // 1. Validar funcionamiento (Soft On + Lógica de Pines)
         if (!isSoftOn || !isLogicMet) {
             if (currentRedstoneOutput != 0) {
                 currentRedstoneOutput = 0;
@@ -72,7 +70,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             return;
         }
 
-        // 2. Ejecutar lógica según modo
         if (this.ioMode == MODE_OUTPUT) {
             handleOutputLogic();
         }
@@ -92,11 +89,16 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         }
     }
 
-    // --- LÓGICA DE CONDICIONALES ---
-    // Verifica si los cables IN conectados reciben señal para habilitar la placa
     public void updateLogicConditions() {
         if(level == null) return;
         BlockState state = getBlockState();
+
+        // En modo SALIDA, siempre está activo, no hay condiciones
+        if (this.ioMode == MODE_OUTPUT) {
+            this.isLogicMet = true;
+            return;
+        }
+
         int inputPinsCount = 0;
         int activeInputPins = 0;
 
@@ -108,7 +110,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             }
         }
 
-        // CONDICIÓN IMPORTANTE: Si no hay pines IN, funciona por defecto
         if (inputPinsCount == 0) {
             this.isLogicMet = true;
             return;
@@ -124,26 +125,46 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     private void handleOutputLogic() {
         assert level != null;
-        int power = level.getBestNeighborSignal(worldPosition);
 
-        if (power == this.cachedRedstoneInput) return;
-        this.cachedRedstoneInput = power;
+        // Lógica de pines IN como fuente de datos
+        int maxPower = 0;
+        boolean hasInputPins = false;
+        BlockState state = getBlockState();
 
-        String messageToSend;
-
-        if (this.signalType == SIGNAL_DIGITAL) {
-            int state = (power > 0) ? 1 : 0;
-            messageToSend = this.targetData + ":" + state;
-        } else {
-            // Salida Analógica (MC->Arduino): Enviamos 0-255 (PWM)
-            int pwm = Math.round((power * 255.0f) / 15.0f);
-            messageToSend = this.targetData + ":" + pwm;
+        for (Direction dir : Direction.values()) {
+            if (state.getValue(ArduinoIOBlock.getPropertyForDirection(dir)) == IOSide.INPUT) {
+                hasInputPins = true;
+                int p = level.getSignal(worldPosition.relative(dir), dir);
+                if (p > maxPower) maxPower = p;
+            }
         }
 
-        sendSerialToClient(messageToSend);
+        if (!hasInputPins) maxPower = 0;
+
+        // Feedback Visual
+        if (this.currentRedstoneOutput != maxPower) {
+            this.currentRedstoneOutput = maxPower;
+            level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
+        }
+
+        // Envío Serial
+        if (maxPower == this.cachedRedstoneInput) return;
+        this.cachedRedstoneInput = maxPower;
+
+        // OPTIMIZACIÓN: STRING BUILDER (Menos basura en memoria)
+        StringBuilder sb = new StringBuilder();
+        sb.append(this.targetData).append(':');
+
+        if (this.signalType == SIGNAL_DIGITAL) {
+            sb.append(maxPower > 0 ? '1' : '0');
+        } else {
+            int pwm = Math.round((maxPower * 255.0f) / 15.0f);
+            sb.append(pwm);
+        }
+
+        sendSerialToClient(sb.toString());
     }
 
-    // --- LÓGICA ENTRADA (Arduino -> Minecraft) ---
     public void processSerialInput(String message) {
         if (!isSoftOn || !isLogicMet || this.ioMode != MODE_INPUT) return;
 
@@ -151,15 +172,10 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             if (message.startsWith(this.targetData + ":")) {
                 String valueStr = message.split(":")[1];
                 int value = Integer.parseInt(valueStr);
-                int newRedstone = 0;
+                int newRedstone = Math.max(0, Math.min(15, value));
 
                 if (this.signalType == SIGNAL_DIGITAL) {
                     newRedstone = (value > 0) ? 15 : 0;
-                } else {
-                    // CAMBIO APLICADO: Ya no calculamos proporción.
-                    // Esperamos que Arduino envíe 0-15 directamente.
-                    // Usamos Math.max/min para seguridad (Clamp)
-                    newRedstone = Math.max(0, Math.min(15, value));
                 }
 
                 if (this.currentRedstoneOutput != newRedstone) {
@@ -173,7 +189,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     }
 
     public int getRedstoneSignal() {
-        return (this.ioMode == MODE_INPUT && isSoftOn && isLogicMet) ? this.currentRedstoneOutput : 0;
+        return (isSoftOn) ? this.currentRedstoneOutput : 0;
     }
 
     private void sendSerialToClient(String msg) {

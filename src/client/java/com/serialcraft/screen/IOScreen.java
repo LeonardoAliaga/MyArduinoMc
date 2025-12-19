@@ -24,10 +24,14 @@ public class IOScreen extends Screen {
     private EditBox dataBox;
     private Button modeButton, signalButton, logicButton;
 
-    private static final int BG_COLOR = 0xFF1E1E1E;
-    private static final int HEADER_COLOR = 0xFF2D2D2D;
-    private static final int ACCENT_COLOR = 0xFF00E5FF;
-    private static final int TEXT_DIM = 0xFFAAAAAA;
+    // --- PALETA DE COLORES ---
+    private static final int BG_COLOR = 0xFFF2F2EC;
+    private static final int CARD_COLOR = 0xFFE6E6DF;
+    private static final int TEXT_MAIN = 0xFF333333;
+    private static final int TEXT_DIM = 0xFF777777;
+    private static final int ACCENT_COLOR = 0xFF00838F;
+    private static final int BORDER_COLOR = 0xFFAAAAAA;
+    private static final int INPUT_BG = 0xFFFFFFFF; // Fondo blanco para inputs
 
     public IOScreen(BlockPos pos, int mode, String data) {
         super(Component.translatable("gui.serialcraft.io.title"));
@@ -52,62 +56,67 @@ public class IOScreen extends Screen {
 
     @Override
     protected void init() {
-        int w = 240; int h = 210; // Aumentado un poco el alto
+        int w = 260; int h = 210;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // 1. ID Placa
-        idBox = new EditBox(font, x + 20, y + 35, 140, 18, Component.literal("ID"));
+        // 1. INPUT ID (Sin borde default, fondo custom en render)
+        idBox = new EditBox(font, x + 30, y + 46, 140, 16, Component.translatable("gui.serialcraft.io.label_id"));
         idBox.setValue(this.boardID);
+        idBox.setTextColor(TEXT_MAIN);
+        idBox.setBordered(false); // Quitamos el borde negro default
         addRenderableWidget(idBox);
 
-        // 2. Botón Power
-        addRenderableWidget(Button.builder(Component.literal(isSoftOn ? "ON" : "OFF"), b -> {
+        // Botón Power
+        addRenderableWidget(Button.builder(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"), b -> {
             isSoftOn = !isSoftOn;
-            b.setMessage(Component.literal(isSoftOn ? "ON" : "OFF"));
-        }).bounds(x + 170, y + 34, 50, 20).build());
+            b.setMessage(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"));
+        }).bounds(x + 185, y + 44, 50, 20).build());
 
-        // 3. Fila de Botones: MODO | SEÑAL | LÓGICA
-        int btnY = y + 70;
+        // 2. Botones Config
+        int btnY = y + 90;
+        int btnW = 70;
+        int gap = 5;
 
         modeButton = Button.builder(getModeText(), b -> {
             ioMode = (ioMode == 0) ? 1 : 0;
             b.setMessage(getModeText());
-        }).bounds(x + 20, btnY, 65, 20).build();
+            logicButton.visible = (ioMode == 1);
+        }).bounds(x + 20, btnY, btnW, 20).build();
         addRenderableWidget(modeButton);
 
         signalButton = Button.builder(getSignalText(), b -> {
             signalType = (signalType == 0) ? 1 : 0;
             b.setMessage(getSignalText());
-        }).bounds(x + 90, btnY, 65, 20).build();
+        }).bounds(x + 20 + btnW + gap, btnY, btnW, 20).build();
         addRenderableWidget(signalButton);
 
         logicButton = Button.builder(getLogicText(), b -> {
             logicMode = (logicMode + 1) % 3;
             b.setMessage(getLogicText());
-        }).bounds(x + 160, btnY, 60, 20).build();
+        }).bounds(x + 20 + (btnW + gap) * 2, btnY, btnW, 20).build();
+        logicButton.visible = (ioMode == 1);
         addRenderableWidget(logicButton);
 
-        // 4. CAMPO COMANDO
-        dataBox = new EditBox(font, x + 20, y + 120, 200, 20, Component.literal("Comando"));
+        // 3. INPUT DATA
+        dataBox = new EditBox(font, x + 30, y + 141, 200, 16, Component.literal("Data"));
         dataBox.setMaxLength(32);
         dataBox.setValue(this.targetData);
+        dataBox.setTextColor(TEXT_MAIN);
+        dataBox.setBordered(false);
         addRenderableWidget(dataBox);
 
-        // 5. Guardar
+        // 4. Guardar
         addRenderableWidget(Button.builder(Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket())
-                .bounds(x + 70, y + 170, 100, 20).build());
+                .bounds(x + 80, y + 180, 100, 20).build());
     }
 
     private Component getModeText() {
-        return (ioMode == 0) ? Component.translatable("gui.serialcraft.mode.out")
-                : Component.translatable("gui.serialcraft.mode.in");
+        return (ioMode == 0) ? Component.translatable("gui.serialcraft.mode.out") : Component.translatable("gui.serialcraft.mode.in");
     }
-
     private Component getSignalText() {
         return (signalType == 0) ? Component.translatable("gui.serialcraft.signal.digital") : Component.translatable("gui.serialcraft.signal.analog");
     }
-
     private Component getLogicText() {
         switch(logicMode) {
             case 0: return Component.translatable("gui.serialcraft.logic.or");
@@ -127,33 +136,47 @@ public class IOScreen extends Screen {
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         this.renderTransparentBackground(gui);
-        int w = 240; int h = 210;
+        int w = 260; int h = 210;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
         gui.fill(x, y, x + w, y + h, BG_COLOR);
-        gui.fill(x, y, x + w, y + 25, HEADER_COLOR);
-        gui.drawCenteredString(font, this.title, this.width / 2, y + 8, ACCENT_COLOR);
+        drawBorder(gui, x, y, w, h, BORDER_COLOR);
 
-        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_id"), x + 20, y + 25, TEXT_DIM, false);
-        gui.drawCenteredString(font, Component.translatable("gui.serialcraft.io.label_command"), this.width / 2, y + 108, ACCENT_COLOR);
+        // Cabecera
+        gui.fill(x, y, x + w, y + 30, CARD_COLOR);
+        gui.drawCenteredString(font, this.title, this.width / 2, y + 10, TEXT_MAIN);
 
-        // Ayuda contextual
-        String help = "";
+        // DIBUJAR CAJAS BLANCAS DETRÁS DE LOS INPUTS
+        // Caja ID
+        drawBorder(gui, x + 25, y + 42, 150, 24, BORDER_COLOR);
+        gui.fill(x + 26, y + 43, x + 25 + 149, y + 42 + 23, INPUT_BG);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_id"), x + 25, y + 32, TEXT_DIM, false);
+
+        // Separador Modo
+        gui.drawCenteredString(font, Component.translatable("gui.serialcraft.io.section_mode"), this.width / 2, y + 75, ACCENT_COLOR);
+
+        // Caja Data
+        drawBorder(gui, x + 25, y + 137, 210, 24, BORDER_COLOR);
+        gui.fill(x + 26, y + 138, x + 25 + 209, y + 137 + 23, INPUT_BG);
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_command"), x + 25, y + 125, TEXT_DIM, false);
+
+        // Ayuda
         String cmd = dataBox.getValue().isEmpty() ? "[CMD]" : dataBox.getValue();
+        String helpKey = (ioMode == 0)
+                ? ((signalType == 0) ? "gui.serialcraft.help.out_dig" : "gui.serialcraft.help.out_pwm")
+                : ((signalType == 0) ? "gui.serialcraft.help.in_dig" : "gui.serialcraft.help.in_pwm");
 
-        if (ioMode == 0) { // Output
-            help = (signalType == 0)
-                    ? "Send: " + cmd + ":1 (ON) / :0 (OFF)"
-                    : "Send: " + cmd + ":[0-255] (PWM)";
-        } else { // Input
-            help = (signalType == 0)
-                    ? "Recv: " + cmd + ":[1/0] -> Max"
-                    : "Recv: " + cmd + ":[0-1023] -> Var";
-        }
-        gui.drawCenteredString(font, help, this.width/2, y + 150, 0xFF888888);
+        gui.drawCenteredString(font, Component.translatable(helpKey, cmd), this.width/2, y + 165, 0xFF888888);
 
         super.render(gui, mouseX, mouseY, partialTick);
+    }
+
+    private void drawBorder(GuiGraphics gui, int x, int y, int width, int height, int color) {
+        gui.fill(x, y, x + width, y + 1, color);
+        gui.fill(x, y + height - 1, x + width, y + height, color);
+        gui.fill(x, y, x + 1, y + height, color);
+        gui.fill(x + width - 1, y, x + width, y + height, color);
     }
 
     @Override public boolean isPauseScreen() { return false; }
