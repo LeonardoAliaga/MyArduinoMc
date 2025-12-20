@@ -1,6 +1,7 @@
 package com.serialcraft.screen;
 
 import com.serialcraft.SerialCraftClient;
+import com.serialcraft.client.ui.SolidButton;
 import com.serialcraft.block.entity.ConnectorBlockEntity;
 import com.serialcraft.network.BoardInfo;
 import com.serialcraft.network.BoardListRequestPayload;
@@ -9,7 +10,6 @@ import com.serialcraft.network.ConnectorPayload;
 import com.serialcraft.network.RemoteTogglePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -32,7 +32,7 @@ public class ConnectorScreen extends Screen {
 
     private List<BoardInfo> boardList = new ArrayList<>();
     private final List<Renderable> uiWidgets = new ArrayList<>();
-    private final List<Button> boardButtons = new ArrayList<>();
+    private final List<SolidButton> boardButtons = new ArrayList<>();
 
     // Colores
     private static final int BG_COLOR = 0xFFF2F2EC;
@@ -73,8 +73,8 @@ public class ConnectorScreen extends Screen {
 
         String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM9";
 
-        // Port Box
-        this.portBox = new EditBox(this.font, x + 35, y + 47, 100, 16, Component.translatable("gui.serialcraft.connector.port_label"));
+        // Port Box (más alto para legibilidad)
+        this.portBox = new EditBox(this.font, x + 35, y + 48, 110, 18, Component.translatable("gui.serialcraft.connector.port_label"));
         this.portBox.setMaxLength(32);
         this.portBox.setValue(isConnected ? SerialCraftClient.arduinoPort.getSystemPortName() : oldPort);
         this.portBox.setTextColor(TEXT_MAIN);
@@ -88,28 +88,31 @@ public class ConnectorScreen extends Screen {
         }
 
         // Conectar
-        this.addCustomWidget(Button.builder(Component.translatable("gui.serialcraft.connector.btn_connect"), b -> {
-            Component res = SerialCraftClient.conectar(portBox.getValue().trim(), this.baudRate);
-            this.statusText = res;
-            this.isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
-            if (isConnected) ClientPlayNetworking.send(new ConnectorPayload(this.pos, true));
-        }).bounds(x + 240, y + 45, 70, 20).build());
+        this.addCustomWidget(SolidButton.success(x + 240, y + 45, 70, 20,
+                Component.translatable("gui.serialcraft.connector.btn_connect"), b -> {
+                    Component res = SerialCraftClient.conectar(portBox.getValue().trim(), this.baudRate);
+                    this.statusText = res;
+                    this.isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
+                    if (isConnected) ClientPlayNetworking.send(new ConnectorPayload(this.pos, true));
+                }));
 
         // Desconectar
-        this.addCustomWidget(Button.builder(Component.literal("X"), b -> {
-            SerialCraftClient.desconectar();
-            this.statusText = Component.translatable("message.serialcraft.disconnected");
-            this.isConnected = false;
-            ClientPlayNetworking.send(new ConnectorPayload(this.pos, false));
-        }).bounds(x + 315, y + 45, 20, 20).build());
+        this.addCustomWidget(SolidButton.danger(x + 315, y + 45, 20, 20,
+                Component.literal("X"), b -> {
+                    SerialCraftClient.desconectar();
+                    this.statusText = Component.translatable("message.serialcraft.disconnected");
+                    this.isConnected = false;
+                    ClientPlayNetworking.send(new ConnectorPayload(this.pos, false));
+                }));
 
         // CONFIG BAUD RATE (Centrado)
         int configY = y + 75;
-        this.addCustomWidget(Button.builder(getBaudText(), b -> {
-            this.baudRate = (this.baudRate == 9600) ? 115200 : 9600;
-            b.setMessage(getBaudText());
-            ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate));
-        }).bounds(x + 100, configY, 140, 20).build());
+        this.addCustomWidget(SolidButton.primary(x + 100, configY, 140, 20,
+                getBaudText(), b -> {
+                    this.baudRate = (this.baudRate == 9600) ? 115200 : 9600;
+                    b.setMessage(getBaudText());
+                    ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate));
+                }));
 
         refreshBoardListWidgets();
     }
@@ -132,7 +135,7 @@ public class ConnectorScreen extends Screen {
     }
 
     private void refreshBoardListWidgets() {
-        for (Button btn : boardButtons) {
+        for (SolidButton btn : boardButtons) {
             this.removeWidget(btn);
             this.uiWidgets.remove(btn);
         }
@@ -148,9 +151,13 @@ public class ConnectorScreen extends Screen {
             int rowY = listStartY + (i * 24);
             if (rowY > y + h - 25) break;
 
-            Button toggleBtn = Button.builder(Component.translatable(info.status() ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"), b -> {
-                ClientPlayNetworking.send(new RemoteTogglePayload(info.pos()));
-            }).bounds(x + 300, rowY + 2, 20, 16).build();
+            SolidButton.Variant v = info.status() ? SolidButton.Variant.SUCCESS : SolidButton.Variant.DANGER;
+            SolidButton toggleBtn = SolidButton.of(
+                    x + 300, rowY + 2, 20, 16,
+                    Component.translatable(info.status() ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"),
+                    b -> ClientPlayNetworking.send(new RemoteTogglePayload(info.pos())),
+                    v
+            );
 
             this.addCustomWidget(toggleBtn);
             boardButtons.add(toggleBtn);
@@ -170,8 +177,9 @@ public class ConnectorScreen extends Screen {
         // TEXTO SIN SOMBRA (false)
         gui.drawString(this.font, this.title, x + (w/2) - (this.font.width(this.title)/2), y + 10, TEXT_MAIN, false);
 
-        drawBorder(gui, x + 30, y + 43, 110, 24, 0xFFAAAAAA);
-        gui.fill(x + 31, y + 44, x + 30 + 109, y + 43 + 23, INPUT_BG);
+        // Input port (más alto)
+        drawBorder(gui, x + 30, y + 43, 120, 26, 0xFFAAAAAA);
+        gui.fill(x + 31, y + 44, x + 30 + 119, y + 43 + 25, INPUT_BG);
 
         // Labels sin sombra
         gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.port_label"), x + 30, y + 33, TEXT_DIM, false);

@@ -42,8 +42,12 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public String boardID = "placa_gen";
     public int logicMode = LOGIC_OR;
 
-    // Frecuencia INDIVIDUAL de esta placa (Hz)
-    public int updateFrequency = 2;
+    /**
+     * Intervalo de actualización individual (en ticks).
+     *
+     * 1 tick = 20 Hz, 2 ticks = 10 Hz, 4 ticks = 5 Hz.
+     */
+    public int updateFrequency = 1;
 
     public UUID ownerUUID = null;
 
@@ -52,6 +56,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
     private long lastUpdateTick = 0;
+    private long lastInputTick = 0;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
@@ -62,13 +67,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
-        // Rate Limiting Individual basado en updateFrequency
-        long gameTime = level.getGameTime();
-        if (gameTime - lastUpdateTick < updateFrequency) {
-            return;
-        }
-        lastUpdateTick = gameTime;
-
+        // Estado OFF/condiciones lógicas: forzar salida 0 sin rate limiting
         if (!isSoftOn || !isLogicMet) {
             if (currentRedstoneOutput != 0) {
                 currentRedstoneOutput = 0;
@@ -77,9 +76,14 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             return;
         }
 
-        if (this.ioMode == MODE_OUTPUT) {
-            handleOutputLogic();
-        }
+        if (this.ioMode != MODE_OUTPUT) return;
+
+        // Rate Limiting Individual basado en updateFrequency
+        long gameTime = level.getGameTime();
+        if (gameTime - lastUpdateTick < updateFrequency) return;
+        lastUpdateTick = gameTime;
+
+        handleOutputLogic();
     }
 
     private void updateVisualState() {
@@ -171,6 +175,13 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public void processSerialInput(String message) {
         if (!isSoftOn || !isLogicMet || this.ioMode != MODE_INPUT) return;
 
+        // Aplicar el intervalo también a INPUT ("velocidad de lectura")
+        if (level != null) {
+            long gameTime = level.getGameTime();
+            if (gameTime - lastInputTick < updateFrequency) return;
+            lastInputTick = gameTime;
+        }
+
         try {
             if (message.startsWith(this.targetData + ":")) {
                 String valueStr = message.split(":")[1];
@@ -213,12 +224,14 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.isSoftOn = softOn;
         this.boardID = (bId == null || bId.isEmpty()) ? "placa_gen" : bId;
 
-        // Actualizamos Hz
+        // Actualizamos intervalo (ticks)
         this.updateFrequency = Math.max(1, frequency);
 
         this.logicMode = logic;
         this.cachedRedstoneInput = -1;
         this.currentRedstoneOutput = 0;
+        this.lastUpdateTick = 0;
+        this.lastInputTick = 0;
 
         updateLogicConditions();
         updateVisualState();
@@ -258,7 +271,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.signalType = input.getIntOr("signalType", 0);
         this.isSoftOn = input.getBooleanOr("isSoftOn", true);
         this.boardID = input.getString("boardID").orElse("placa_gen");
-        this.updateFrequency = input.getIntOr("updateFreq", 2);
+        this.updateFrequency = input.getIntOr("updateFreq", 1);
         this.logicMode = input.getIntOr("logicMode", LOGIC_OR);
         this.currentRedstoneOutput = input.getIntOr("rsOut", 0);
 

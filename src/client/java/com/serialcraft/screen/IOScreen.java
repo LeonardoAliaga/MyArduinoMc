@@ -1,10 +1,10 @@
 package com.serialcraft.screen;
 
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
+import com.serialcraft.client.ui.SolidButton;
 import com.serialcraft.network.ConfigPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -31,7 +31,7 @@ public class IOScreen extends Screen {
 
     private EditBox idBox;
     private EditBox dataBox;
-    private Button logicButton;
+    private SolidButton logicButton;
 
     private final List<Renderable> uiWidgets = new ArrayList<>();
 
@@ -63,7 +63,7 @@ public class IOScreen extends Screen {
             this.isSoftOn = true;
             this.boardID = "Arduino_1";
             this.logicMode = 0;
-            this.updateFreq = 2; // 10Hz
+            this.updateFreq = 1; // 20Hz por defecto
         }
     }
 
@@ -77,55 +77,62 @@ public class IOScreen extends Screen {
         int y = (this.height - h) / 2;
 
         // ID Box
-        idBox = new EditBox(font, x + 30, y + 46, 140, 16, Component.translatable("gui.serialcraft.io.label_id"));
+        idBox = new EditBox(font, x + 30, y + 48, 160, 18, Component.translatable("gui.serialcraft.io.label_id"));
         idBox.setValue(this.boardID);
         idBox.setTextColor(TEXT_MAIN);
         idBox.setBordered(false);
         addCustomWidget(idBox);
 
         // Power
-        addCustomWidget(Button.builder(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"), b -> {
-            isSoftOn = !isSoftOn;
-            b.setMessage(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"));
-        }).bounds(x + 185, y + 44, 50, 20).build());
+        SolidButton powerBtn = SolidButton.of(
+                x + 200, y + 45, 35, 20,
+                Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"),
+                b -> {
+                    isSoftOn = !isSoftOn;
+                    b.setMessage(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"));
+                    if (b instanceof SolidButton sb) {
+                        sb.setVariant(isSoftOn ? SolidButton.Variant.SUCCESS : SolidButton.Variant.DANGER);
+                    }
+                }, isSoftOn ? SolidButton.Variant.SUCCESS : SolidButton.Variant.DANGER);
+        addCustomWidget(powerBtn);
 
         // Fila 1
         int btnY = y + 90;
         int btnW = 70;
         int gap = 5;
 
-        Button modeButton = Button.builder(getModeText(), b -> {
+        SolidButton modeButton = SolidButton.primary(x + 20, btnY, btnW, 20, getModeText(), b -> {
             ioMode = (ioMode == 0) ? 1 : 0;
             b.setMessage(getModeText());
             logicButton.visible = (ioMode == 1);
-        }).bounds(x + 20, btnY, btnW, 20).build();
+        });
         addCustomWidget(modeButton);
 
-        Button signalButton = Button.builder(getSignalText(), b -> {
+        SolidButton signalButton = SolidButton.primary(x + 20 + btnW + gap, btnY, btnW, 20, getSignalText(), b -> {
             signalType = (signalType == 0) ? 1 : 0;
             b.setMessage(getSignalText());
-        }).bounds(x + 20 + btnW + gap, btnY, btnW, 20).build();
+        });
         addCustomWidget(signalButton);
 
-        logicButton = Button.builder(getLogicText(), b -> {
+        logicButton = SolidButton.primary(x + 20 + (btnW + gap) * 2, btnY, btnW, 20, getLogicText(), b -> {
             logicMode = (logicMode + 1) % 3;
             b.setMessage(getLogicText());
-        }).bounds(x + 20 + (btnW + gap) * 2, btnY, btnW, 20).build();
+        });
         logicButton.visible = (ioMode == 1);
         addCustomWidget(logicButton);
 
         // Fila 2: Solo Frecuencia (Centrado)
         int btnY2 = y + 115;
-        Button freqButton = Button.builder(getFreqText(), b -> {
+        SolidButton freqButton = SolidButton.soft(x + 80, btnY2, 100, 20, getFreqText(), b -> {
             if (updateFreq == 1) updateFreq = 2;
             else if (updateFreq == 2) updateFreq = 4;
             else updateFreq = 1;
             b.setMessage(getFreqText());
-        }).bounds(x + 80, btnY2, 100, 20).build();
+        });
         addCustomWidget(freqButton);
 
         // Data Box
-        dataBox = new EditBox(font, x + 30, y + 155, 200, 16, Component.literal("Data"));
+        dataBox = new EditBox(font, x + 30, y + 157, 200, 18, Component.literal("Data"));
         dataBox.setMaxLength(32);
         dataBox.setValue(this.targetData);
         dataBox.setTextColor(TEXT_MAIN);
@@ -133,8 +140,8 @@ public class IOScreen extends Screen {
         addCustomWidget(dataBox);
 
         // Guardar
-        addCustomWidget(Button.builder(Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket())
-                .bounds(x + 80, y + 195, 100, 20).build());
+        addCustomWidget(SolidButton.success(x + 80, y + 195, 100, 20,
+                Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket()));
     }
 
     // CORRECCIÓN TÉCNICA
@@ -183,15 +190,16 @@ public class IOScreen extends Screen {
         // TEXTO SIN SOMBRA (false)
         gui.drawString(font, this.title, x + (w/2) - (font.width(this.title)/2), y + 10, TEXT_MAIN, false);
 
-        drawBorder(gui, x + 25, y + 42, 150, 24, BORDER_COLOR);
-        gui.fill(x + 26, y + 43, x + 25 + 149, y + 42 + 23, INPUT_BG);
+        // Inputs más altos para legibilidad
+        drawBorder(gui, x + 25, y + 42, 170, 26, BORDER_COLOR);
+        gui.fill(x + 26, y + 43, x + 25 + 169, y + 42 + 25, INPUT_BG);
         // Label sin sombra
         gui.drawString(font, Component.translatable("gui.serialcraft.io.label_id"), x + 25, y + 32, TEXT_DIM, false);
 
         gui.drawCenteredString(font, Component.translatable("gui.serialcraft.io.section_mode"), this.width / 2, y + 75, ACCENT_COLOR);
 
-        drawBorder(gui, x + 25, y + 151, 210, 24, BORDER_COLOR);
-        gui.fill(x + 26, y + 152, x + 25 + 209, y + 151 + 23, INPUT_BG);
+        drawBorder(gui, x + 25, y + 151, 210, 26, BORDER_COLOR);
+        gui.fill(x + 26, y + 152, x + 25 + 209, y + 151 + 25, INPUT_BG);
         // Label sin sombra
         gui.drawString(font, Component.translatable("gui.serialcraft.io.label_command"), x + 25, y + 140, TEXT_DIM, false);
 
