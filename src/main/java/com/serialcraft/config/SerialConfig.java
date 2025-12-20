@@ -17,7 +17,7 @@ public class SerialConfig {
     // --- OPCIONES GUARDADAS ---
     public BoardProfile boardProfile = BoardProfile.ARDUINO_UNO;
     public int baudRate = 9600;
-    public int analogUpdateRate = 2; // Ticks entre actualizaciones (2 ticks = 100ms)
+    public int analogUpdateRate = 1; // Ticks entre actualizaciones (2 ticks = 100ms)
 
     // --- ENUM DE PERFILES ---
     public enum BoardProfile {

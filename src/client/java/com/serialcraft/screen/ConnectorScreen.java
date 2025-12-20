@@ -50,6 +50,7 @@ public class ConnectorScreen extends Screen {
         this.pos = pos;
         this.statusText = Component.literal("...");
 
+        assert net.minecraft.client.Minecraft.getInstance().level != null;
         if (net.minecraft.client.Minecraft.getInstance().level.getBlockEntity(pos) instanceof ConnectorBlockEntity be) {
             this.baudRate = be.baudRate;
         }
@@ -70,7 +71,7 @@ public class ConnectorScreen extends Screen {
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM3";
+        String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM9";
 
         // Port Box
         this.portBox = new EditBox(this.font, x + 35, y + 47, 100, 16, Component.translatable("gui.serialcraft.connector.port_label"));

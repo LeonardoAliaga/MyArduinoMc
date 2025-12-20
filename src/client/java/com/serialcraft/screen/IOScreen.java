@@ -21,9 +21,9 @@ public class IOScreen extends Screen {
 
     private int ioMode;
     private int signalType;
-    private String targetData;
+    private final String targetData;
     private boolean isSoftOn;
-    private String boardID;
+    private final String boardID;
     private int logicMode;
 
     // Solo Frecuencia individual aquí
@@ -31,7 +31,7 @@ public class IOScreen extends Screen {
 
     private EditBox idBox;
     private EditBox dataBox;
-    private Button modeButton, signalButton, logicButton, freqButton;
+    private Button logicButton;
 
     private final List<Renderable> uiWidgets = new ArrayList<>();
 
@@ -47,6 +47,7 @@ public class IOScreen extends Screen {
         super(Component.translatable("gui.serialcraft.io.title"));
         this.pos = pos;
 
+        assert net.minecraft.client.Minecraft.getInstance().level != null;
         if (net.minecraft.client.Minecraft.getInstance().level.getBlockEntity(pos) instanceof ArduinoIOBlockEntity io) {
             this.ioMode = io.ioMode;
             this.signalType = io.signalType;
@@ -93,14 +94,14 @@ public class IOScreen extends Screen {
         int btnW = 70;
         int gap = 5;
 
-        modeButton = Button.builder(getModeText(), b -> {
+        Button modeButton = Button.builder(getModeText(), b -> {
             ioMode = (ioMode == 0) ? 1 : 0;
             b.setMessage(getModeText());
             logicButton.visible = (ioMode == 1);
         }).bounds(x + 20, btnY, btnW, 20).build();
         addCustomWidget(modeButton);
 
-        signalButton = Button.builder(getSignalText(), b -> {
+        Button signalButton = Button.builder(getSignalText(), b -> {
             signalType = (signalType == 0) ? 1 : 0;
             b.setMessage(getSignalText());
         }).bounds(x + 20 + btnW + gap, btnY, btnW, 20).build();
@@ -115,7 +116,7 @@ public class IOScreen extends Screen {
 
         // Fila 2: Solo Frecuencia (Centrado)
         int btnY2 = y + 115;
-        freqButton = Button.builder(getFreqText(), b -> {
+        Button freqButton = Button.builder(getFreqText(), b -> {
             if (updateFreq == 1) updateFreq = 2;
             else if (updateFreq == 2) updateFreq = 4;
             else updateFreq = 1;
