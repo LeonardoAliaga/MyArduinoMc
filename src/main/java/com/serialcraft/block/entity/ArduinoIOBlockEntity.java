@@ -25,6 +25,7 @@ import java.util.UUID;
 
 public class ArduinoIOBlockEntity extends BlockEntity {
 
+    // Constantes
     public static final int MODE_OUTPUT = 0;
     public static final int MODE_INPUT = 1;
     public static final int SIGNAL_DIGITAL = 0;
@@ -33,6 +34,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public static final int LOGIC_AND = 1;
     public static final int LOGIC_XOR = 2;
 
+    // Variables de estado
     public int ioMode = MODE_OUTPUT;
     public int signalType = SIGNAL_DIGITAL;
     public String targetData = "cmd_1";
@@ -40,11 +42,12 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public String boardID = "placa_gen";
     public int logicMode = LOGIC_OR;
 
-    // Frecuencia INDIVIDUAL de esta placa
+    // Frecuencia INDIVIDUAL de esta placa (Hz)
     public int updateFrequency = 2;
 
     public UUID ownerUUID = null;
 
+    // Variables internas de lógica
     private int currentRedstoneOutput = 0;
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
@@ -59,7 +62,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
-        // Rate Limiting Individual
+        // Rate Limiting Individual basado en updateFrequency
         long gameTime = level.getGameTime();
         if (gameTime - lastUpdateTick < updateFrequency) {
             return;
@@ -147,6 +150,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
         }
 
+        // Evitar enviar spam si el valor no ha cambiado
         if (maxPower == this.cachedRedstoneInput) return;
         this.cachedRedstoneInput = maxPower;
 
@@ -156,6 +160,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         if (this.signalType == SIGNAL_DIGITAL) {
             sb.append(maxPower > 0 ? '1' : '0');
         } else {
+            // Mapeo de 0-15 a 0-255
             int pwm = Math.round((maxPower * 255.0f) / 15.0f);
             sb.append(pwm);
         }
@@ -200,7 +205,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         }
     }
 
-    // --- CONFIG UPDATE CORREGIDO (Solo Hz, sin BaudRate) ---
+    // --- CONFIG UPDATE ---
     public void updateConfig(int mode, String data, int signal, boolean softOn, String bId, int frequency, int logic) {
         this.ioMode = mode;
         this.targetData = (data == null) ? "" : data;
@@ -208,7 +213,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.isSoftOn = softOn;
         this.boardID = (bId == null || bId.isEmpty()) ? "placa_gen" : bId;
 
-        // Actualizamos frecuencia individual
+        // Actualizamos Hz
         this.updateFrequency = Math.max(1, frequency);
 
         this.logicMode = logic;
@@ -220,9 +225,14 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
         setChanged();
         assert level != null;
+        // Notificamos al cliente para que actualice datos
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
     }
+
+    // ==========================================
+    // MÉTODOS DE GUARDADO (USANDO ValueOutput/Input)
+    // ==========================================
 
     @Override
     protected void saveAdditional(ValueOutput output) {
@@ -232,10 +242,12 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         output.putInt("signalType", signalType);
         output.putBoolean("isSoftOn", isSoftOn);
         output.putString("boardID", boardID);
-        output.putInt("updateFreq", updateFrequency); // Guardar Hz individual
+        output.putInt("updateFreq", updateFrequency);
         output.putInt("logicMode", logicMode);
         output.putInt("rsOut", currentRedstoneOutput);
-        if (this.ownerUUID != null) output.putString("OwnerUUID", this.ownerUUID.toString());
+        if (this.ownerUUID != null) {
+            output.putString("OwnerUUID", this.ownerUUID.toString());
+        }
     }
 
     @Override
@@ -246,13 +258,18 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.signalType = input.getIntOr("signalType", 0);
         this.isSoftOn = input.getBooleanOr("isSoftOn", true);
         this.boardID = input.getString("boardID").orElse("placa_gen");
-        this.updateFrequency = input.getIntOr("updateFreq", 2); // Cargar Hz individual
+        this.updateFrequency = input.getIntOr("updateFreq", 2);
         this.logicMode = input.getIntOr("logicMode", LOGIC_OR);
         this.currentRedstoneOutput = input.getIntOr("rsOut", 0);
+
         input.getString("OwnerUUID").ifPresent(uuidStr -> {
             try { this.ownerUUID = UUID.fromString(uuidStr); } catch (Exception ignored) { }
         });
     }
+
+    // ==========================================
+    // SINCRONIZACIÓN CLIENTE (Solo aquí se usa CompoundTag porque Minecraft lo obliga en el return)
+    // ==========================================
 
     @Override
     public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {
@@ -262,7 +279,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         tag.putInt("signalType", signalType);
         tag.putBoolean("isSoftOn", isSoftOn);
         tag.putString("boardID", boardID);
-        tag.putInt("updateFreq", updateFrequency); // Importante para que el cliente lo sepa al abrir GUI
+        tag.putInt("updateFreq", updateFrequency);
         tag.putInt("logicMode", logicMode);
         return tag;
     }

@@ -126,7 +126,6 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
         } else {
             // Interacción general (Click derecho en la base)
-            // Aquí podrías abrir la GUI si lo deseas, o mostrar el mensaje de estado actual
             io.onPlayerInteract(player);
         }
         return InteractionResult.SUCCESS;
@@ -141,18 +140,18 @@ public class ArduinoIOBlock extends BaseEntityBlock {
                 // Asignar Dueño
                 ioEntity.setOwner(player.getUUID());
 
-                // --- ACTUALIZADO: INICIALIZACIÓN CON NUEVOS PARÁMETROS ---
                 String uniqueName = "Board_" + pos.getX() + "_" + pos.getY() + "_" + pos.getZ();
 
-                // Usamos los nuevos campos baudRate y updateFrequency
+                // === ACTUALIZADO: Adaptado a la Entity que generamos antes ===
+                // Eliminado baudRate de aquí (va en el conector)
+                // Se pasa ioEntity.updateFrequency (Hz)
                 ioEntity.updateConfig(
                         ioEntity.ioMode,
                         ioEntity.targetData,
                         ioEntity.signalType,
                         ioEntity.isSoftOn,
                         uniqueName,
-                        ioEntity.baudRate,        // Nuevo: Baudrate por defecto (9600)
-                        ioEntity.updateFrequency, // Nuevo: Frecuencia por defecto (2 ticks)
+                        ioEntity.updateFrequency, // Pasamos la frecuencia (Hz)
                         ioEntity.logicMode
                 );
 

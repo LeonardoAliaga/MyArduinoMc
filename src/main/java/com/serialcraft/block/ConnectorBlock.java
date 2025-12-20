@@ -5,13 +5,14 @@ import com.serialcraft.block.entity.ConnectorBlockEntity;
 import com.serialcraft.block.entity.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.EntityBlock; // Importante
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -26,7 +27,6 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-// AÑADIDO: implements EntityBlock
 public class ConnectorBlock extends HorizontalDirectionalBlock implements EntityBlock {
 
     public static final MapCodec<ConnectorBlock> CODEC = simpleCodec(ConnectorBlock::new);
@@ -52,13 +52,12 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Conectar el Ticker que apaga el bloque al cargar
+        // Ahora sí funcionará porque agregaremos el método tick a ConnectorBlockEntity
         if (type == ModBlockEntities.CONNECTOR_BLOCK_ENTITY) {
             return (lvl, pos, st, be) -> ConnectorBlockEntity.tick(lvl, pos, st, (ConnectorBlockEntity) be);
         }
         return null;
     }
-
 
     @Override
     public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
@@ -88,6 +87,13 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
 
     @Override
     protected @NotNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+        if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof ConnectorBlockEntity connector) {
+                // CORREGIDO: Se elimina 'pos' como argumento
+                serverPlayer.openMenu(connector);
+            }
+        }
         return InteractionResult.SUCCESS;
     }
 }

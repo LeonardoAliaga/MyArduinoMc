@@ -8,7 +8,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
 
-// Solo transporta BaudRate (Global)
 public record ConnectorConfigPayload(BlockPos pos, int baudRate) implements CustomPacketPayload {
 
     public static final Type<ConnectorConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "connector_config"));
