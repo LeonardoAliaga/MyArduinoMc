@@ -16,8 +16,8 @@ public record ConfigPayload(
         int signalType,
         boolean isSoftOn,
         String boardID,
-        int pulseDuration,
-        int logicMode       // Nuevo campo
+        int updateFreq, // Individual por placa
+        int logicMode
 ) implements CustomPacketPayload {
 
     public static final Type<ConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "config_packet"));
@@ -30,7 +30,7 @@ public record ConfigPayload(
                 b.writeInt(v.signalType);
                 b.writeBoolean(v.isSoftOn);
                 ByteBufCodecs.STRING_UTF8.encode(b, v.boardID);
-                b.writeInt(v.pulseDuration);
+                b.writeInt(v.updateFreq); // Solo Freq
                 b.writeInt(v.logicMode);
             },
             b -> new ConfigPayload(

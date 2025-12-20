@@ -4,7 +4,8 @@ import com.serialcraft.SerialCraft;
 import com.serialcraft.block.ConnectorBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents; // IMPORTANTE
+import com.serialcraft.block.entity.ConnectorBlockEntity;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,18 +20,26 @@ public class ModNetworking {
         PayloadTypeRegistry.playC2S().register(SerialInputPayload.TYPE, SerialInputPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoardListRequestPayload.TYPE, BoardListRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RemoteTogglePayload.TYPE, RemoteTogglePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ConnectorConfigPayload.TYPE, ConnectorConfigPayload.CODEC);
 
         PayloadTypeRegistry.playS2C().register(SerialOutputPayload.TYPE, SerialOutputPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoardListResponsePayload.TYPE, BoardListResponsePayload.CODEC);
     }
 
     public static void registerServerHandlers() {
-        // --- 2. LIMPIEZA DE LISTA POR MUNDO ---
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            SerialCraft.activeIOBlocks.clear();
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> SerialCraft.activeIOBlocks.clear());
+
+        // 1. CONFIGURACIÓN GLOBAL (Laptop) -> Solo BaudRate
+        ServerPlayNetworking.registerGlobalReceiver(ConnectorConfigPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                if (context.player().level().getBlockEntity(payload.pos()) instanceof ConnectorBlockEntity connector) {
+                    connector.baudRate = payload.baudRate();
+                    connector.setChanged();
+                }
+            });
         });
 
-        // Configuración Principal
+        // 2. CONFIGURACIÓN INDIVIDUAL (Placas IO) -> Incluye Frecuencia (Hz)
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos()) instanceof ArduinoIOBlockEntity entity) {
@@ -41,7 +50,7 @@ public class ModNetworking {
                                 payload.signalType(),
                                 payload.isSoftOn(),
                                 payload.boardID(),
-                                payload.pulseDuration(),
+                                payload.updateFreq(), // Aquí se aplica la frecuencia individual
                                 payload.logicMode()
                         );
                     }
@@ -49,7 +58,7 @@ public class ModNetworking {
             });
         });
 
-        // Connector
+        // Connector Handler
         ServerPlayNetworking.registerGlobalReceiver(ConnectorPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 var level = context.player().level();
@@ -60,7 +69,7 @@ public class ModNetworking {
             });
         });
 
-        // Input Serial
+        // Serial Input
         ServerPlayNetworking.registerGlobalReceiver(SerialInputPayload.TYPE, (payload, context) -> {
             ServerPlayer sender = context.player();
             context.server().execute(() -> {
@@ -75,7 +84,7 @@ public class ModNetworking {
             });
         });
 
-        // Lista de Placas
+        // Board List
         ServerPlayNetworking.registerGlobalReceiver(BoardListRequestPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
             context.server().execute(() -> {
@@ -91,11 +100,12 @@ public class ModNetworking {
             });
         });
 
-        // Toggle Remoto
+        // Remote Toggle
         ServerPlayNetworking.registerGlobalReceiver(RemoteTogglePayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.targetPos()) instanceof ArduinoIOBlockEntity io) {
-                    io.updateConfig(io.ioMode, io.targetData, io.signalType, !io.isSoftOn, io.boardID, io.pulseDuration, io.logicMode);
+                    io.updateConfig(io.ioMode, io.targetData, io.signalType, !io.isSoftOn, io.boardID,
+                            io.updateFrequency, io.logicMode); // Mantiene frecuencia actual
                 }
             });
         });

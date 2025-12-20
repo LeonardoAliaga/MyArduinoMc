@@ -45,6 +45,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final BooleanProperty BLINKING = BooleanProperty.create("blinking");
     public static final IntegerProperty MODE = IntegerProperty.create("mode", 0, 2);
 
+    // Propiedades para la configuración de cada lado (Input/Output/None)
     public static final EnumProperty<IOSide> NORTH = EnumProperty.create("north", IOSide.class);
     public static final EnumProperty<IOSide> SOUTH = EnumProperty.create("south", IOSide.class);
     public static final EnumProperty<IOSide> EAST = EnumProperty.create("east", IOSide.class);
@@ -52,6 +53,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
     public static final EnumProperty<IOSide> UP = EnumProperty.create("up", IOSide.class);
     public static final EnumProperty<IOSide> DOWN = EnumProperty.create("down", IOSide.class);
 
+    // VoxelShape compleja para el modelo 3D
     private static final VoxelShape SHAPE_BASE = Shapes.or(
             Block.box(0, 0, 0, 16, 2, 16),
             Block.box(7, 2, 0, 9, 6, 2.5),
@@ -60,7 +62,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
             Block.box(0, 2, 7, 2.5, 6, 9)
     );
 
-    // Hitboxes Botones
+    // Hitboxes específicas para los botones/conectores
     private static final AABB BTN_NORTE = new AABB(7/16d, 2/16d, 0/16d, 9/16d, 6/16d, 2.475/16d);
     private static final AABB BTN_SUR   = new AABB(7/16d, 2/16d, 13.575/16d, 9/16d, 6/16d, 16/16d);
     private static final AABB BTN_ESTE  = new AABB(13.6/16d, 2/16d, 7/16d, 16/16d, 6/16d, 9/16d);
@@ -75,6 +77,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
                 .setValue(WEST, IOSide.NONE).setValue(UP, IOSide.NONE).setValue(DOWN, IOSide.NONE));
     }
 
+    // Detectar qué botón pequeño se presionó
     public Direction getHitButton(Vec3 localHit) {
         double margin = 0.03;
         if (BTN_NORTE.inflate(margin).contains(localHit)) return Direction.NORTH;
@@ -93,7 +96,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof ArduinoIOBlockEntity io)) return InteractionResult.FAIL;
 
-        // --- 4. SISTEMA DE SEGURIDAD (Servidor) ---
+        // --- SISTEMA DE SEGURIDAD (Servidor) ---
         if (io.ownerUUID != null && !io.ownerUUID.equals(player.getUUID()) && !player.hasPermissions(2)) {
             player.displayClientMessage(Component.translatable("message.serialcraft.not_owner"), true);
             return InteractionResult.FAIL;
@@ -103,6 +106,7 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         Direction btn = getHitButton(hitPos);
 
         if (btn != null) {
+            // Configurar lados (Input/Output/None)
             EnumProperty<IOSide> property = getPropertyForDirection(btn);
             IOSide current = state.getValue(property);
             IOSide next;
@@ -121,6 +125,8 @@ public class ArduinoIOBlock extends BaseEntityBlock {
             level.updateNeighborsAt(pos, this);
 
         } else {
+            // Interacción general (Click derecho en la base)
+            // Aquí podrías abrir la GUI si lo deseas, o mostrar el mensaje de estado actual
             io.onPlayerInteract(player);
         }
         return InteractionResult.SUCCESS;
@@ -135,9 +141,20 @@ public class ArduinoIOBlock extends BaseEntityBlock {
                 // Asignar Dueño
                 ioEntity.setOwner(player.getUUID());
 
-                // --- 4. NOMBRE ÚNICO POR DEFECTO ---
+                // --- ACTUALIZADO: INICIALIZACIÓN CON NUEVOS PARÁMETROS ---
                 String uniqueName = "Board_" + pos.getX() + "_" + pos.getY() + "_" + pos.getZ();
-                ioEntity.updateConfig(ioEntity.ioMode, ioEntity.targetData, ioEntity.signalType, ioEntity.isSoftOn, uniqueName, ioEntity.pulseDuration, ioEntity.logicMode);
+
+                // Usamos los nuevos campos baudRate y updateFrequency
+                ioEntity.updateConfig(
+                        ioEntity.ioMode,
+                        ioEntity.targetData,
+                        ioEntity.signalType,
+                        ioEntity.isSoftOn,
+                        uniqueName,
+                        ioEntity.baudRate,        // Nuevo: Baudrate por defecto (9600)
+                        ioEntity.updateFrequency, // Nuevo: Frecuencia por defecto (2 ticks)
+                        ioEntity.logicMode
+                );
 
                 player.displayClientMessage(Component.translatable("message.serialcraft.linked", player.getName().getString()), true);
                 SerialCraft.activeIOBlocks.add(ioEntity);

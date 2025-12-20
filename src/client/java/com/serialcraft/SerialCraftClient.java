@@ -41,9 +41,6 @@ public class SerialCraftClient implements ClientModInitializer {
             SerialDebugHud.addLog("Desconectado por salida del mundo.");
         });
 
-        // NOTA: Se ha eliminado ClientTickEvents.END_CLIENT_TICK para liberar el hilo principal.
-        // La lectura ahora ocurre en 'serialLoop' dentro de un hilo separado.
-
         // HANDLER: Salida Serial (MC -> Arduino)
         ClientPlayNetworking.registerGlobalReceiver(SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
@@ -101,7 +98,8 @@ public class SerialCraftClient implements ClientModInitializer {
         });
     }
 
-    public static Component conectar(String puerto) {
+    // --- MÉTODO ACTUALIZADO PARA RECIBIR BAUDRATE ---
+    public static Component conectar(String puerto, int baudRate) {
         if (arduinoPort != null && arduinoPort.isOpen())
             return Component.translatable("message.serialcraft.already_connected");
 
@@ -113,11 +111,11 @@ public class SerialCraftClient implements ClientModInitializer {
             for (SerialPort p : ports) {
                 if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
                     arduinoPort = p;
-                    arduinoPort.setBaudRate(9600);
+                    // AQUI SE APLICA EL CAMBIO
+                    arduinoPort.setBaudRate(baudRate);
 
                     if (arduinoPort.openPort()) {
-                        // Configuración para lectura eficiente en hilo dedicado
-                        // TIMEOUT_READ_BLOCKING permite que el hilo "duerma" esperando datos
+                        // Configuración para lectura eficiente
                         arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 1000, 0);
 
                         // INICIAR HILO DE LECTURA
@@ -141,7 +139,6 @@ public class SerialCraftClient implements ClientModInitializer {
             arduinoPort.closePort();
             arduinoPort = null;
         }
-        // Esperar a que el hilo termine limpiamente (opcional)
         try {
             if (serialThread != null && serialThread.isAlive()) {
                 serialThread.join(500);
@@ -149,15 +146,13 @@ public class SerialCraftClient implements ClientModInitializer {
         } catch (InterruptedException e) {}
     }
 
-    // --- HILO DEDICADO DE LECTURA (Alto Rendimiento) ---
+    // --- HILO DEDICADO DE LECTURA ---
     private static void serialLoop() {
         StringBuilder localBuffer = new StringBuilder();
         byte[] readBuffer = new byte[1024];
 
         while (running && arduinoPort != null && arduinoPort.isOpen()) {
             try {
-                // Lee bytes disponibles. Si no hay, espera hasta 1000ms (configurado en timeout)
-                // Esto evita que el CPU suba al 100% en un bucle vacío.
                 int numRead = arduinoPort.readBytes(readBuffer, readBuffer.length);
 
                 if (numRead > 0) {
@@ -170,7 +165,6 @@ public class SerialCraftClient implements ClientModInitializer {
                         localBuffer.delete(0, newlineIndex + 1);
 
                         if (!fullMessage.isEmpty()) {
-                            // SOLO aquí molestamos al hilo principal del juego
                             Minecraft.getInstance().execute(() -> {
                                 SerialDebugHud.addLog("RX: " + fullMessage);
                                 ClientPlayNetworking.send(new SerialInputPayload(fullMessage));
@@ -180,7 +174,7 @@ public class SerialCraftClient implements ClientModInitializer {
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                desconectar(); // Desconexión de seguridad ante error fatal
+                desconectar();
             }
         }
     }
@@ -188,7 +182,6 @@ public class SerialCraftClient implements ClientModInitializer {
     public static void enviarArduinoLocal(String msg) {
         if (arduinoPort != null && arduinoPort.isOpen()) {
             try {
-                // La escritura es rápida, puede hacerse en el hilo principal o delegarse
                 arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1);
             } catch (Exception e) { e.printStackTrace(); }
         }

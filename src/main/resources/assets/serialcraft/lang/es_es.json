@@ -1,4 +1,9 @@
 {
+  "block.serialcraft.connector_block": "Laptop de Control Central",
+  "item.serialcraft.connector_block": "Laptop de Control Central",
+  "block.serialcraft.io_block": "Placa Arduino IO",
+  "item.serialcraft.io_block": "Placa Arduino IO",
+
   "gui.serialcraft.io.title": "⚙ CONFIGURACIÓN I/O",
   "gui.serialcraft.io.label_id": "ID DE PLACA",
   "gui.serialcraft.io.label_command": "COMANDO SERIAL / CANAL",
@@ -15,6 +20,13 @@
   "gui.serialcraft.logic.and": "🔗 AND",
   "gui.serialcraft.logic.xor": "🔂 XOR",
 
+  "gui.serialcraft.baud.arduino": "Global: Arduino (9600)",
+  "gui.serialcraft.baud.esp32": "Global: ESP32 (115200)",
+
+  "gui.serialcraft.freq.fast": "Vel: 20Hz (Rápido)",
+  "gui.serialcraft.freq.normal": "Vel: 10Hz (Normal)",
+  "gui.serialcraft.freq.slow": "Vel: 5Hz (Lento)",
+
   "gui.serialcraft.help.out_dig": "Envía: %s:1 (ON) / :0 (OFF)",
   "gui.serialcraft.help.out_pwm": "Envía: %s:[0-255] (PWM)",
   "gui.serialcraft.help.in_dig": "Recibe: %s:[1/0]",
@@ -28,11 +40,20 @@
 
   "message.serialcraft.on_icon": "⚡ ON",
   "message.serialcraft.off_icon": "⭕ OFF",
+  "message.serialcraft.on": "ACTIVO",
+  "message.serialcraft.off": "INACTIVO",
+
   "message.serialcraft.connected": "§aConectado a %s",
   "message.serialcraft.disconnected": "§cDesconectado",
-  "message.serialcraft.port_not_found": "§cPuerto no encontrado",
+  "message.serialcraft.already_connected": "§eYa estás conectado",
+  "message.serialcraft.no_ports": "§cNo se detectan puertos seriales",
+  "message.serialcraft.port_not_found": "§cPuerto %s no encontrado",
+  "message.serialcraft.error": "§cError: %s",
+
   "message.serialcraft.io_input": "Puerto: ENTRADA (Lee)",
   "message.serialcraft.io_output": "Puerto: SALIDA (Emite)",
   "message.serialcraft.io_disconnected": "Puerto Desconectado",
-  "message.serialcraft.not_owner": "§cError: Placa bloqueada por dueño."
+  "message.serialcraft.not_owner": "§cError: Placa bloqueada por dueño.",
+  "message.serialcraft.linked": "Dueño registrado: %s",
+  "message.serialcraft.io_status": "ID Placa: %s | Estado: %s"
 }

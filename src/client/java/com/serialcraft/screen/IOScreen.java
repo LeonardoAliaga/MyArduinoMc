@@ -6,9 +6,15 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class IOScreen extends Screen {
     private final BlockPos pos;
@@ -20,18 +26,22 @@ public class IOScreen extends Screen {
     private String boardID;
     private int logicMode;
 
+    // Solo Frecuencia individual aquí
+    private int updateFreq;
+
     private EditBox idBox;
     private EditBox dataBox;
-    private Button modeButton, signalButton, logicButton;
+    private Button modeButton, signalButton, logicButton, freqButton;
 
-    // --- PALETA DE COLORES ---
+    private final List<Renderable> uiWidgets = new ArrayList<>();
+
     private static final int BG_COLOR = 0xFFF2F2EC;
     private static final int CARD_COLOR = 0xFFE6E6DF;
     private static final int TEXT_MAIN = 0xFF333333;
     private static final int TEXT_DIM = 0xFF777777;
     private static final int ACCENT_COLOR = 0xFF00838F;
     private static final int BORDER_COLOR = 0xFFAAAAAA;
-    private static final int INPUT_BG = 0xFFFFFFFF; // Fondo blanco para inputs
+    private static final int INPUT_BG = 0xFFFFFFFF;
 
     public IOScreen(BlockPos pos, int mode, String data) {
         super(Component.translatable("gui.serialcraft.io.title"));
@@ -44,6 +54,7 @@ public class IOScreen extends Screen {
             this.isSoftOn = io.isSoftOn;
             this.boardID = io.boardID;
             this.logicMode = io.logicMode;
+            this.updateFreq = io.updateFrequency;
         } else {
             this.ioMode = 0;
             this.signalType = 0;
@@ -51,29 +62,33 @@ public class IOScreen extends Screen {
             this.isSoftOn = true;
             this.boardID = "Arduino_1";
             this.logicMode = 0;
+            this.updateFreq = 2; // 10Hz
         }
     }
 
     @Override
     protected void init() {
-        int w = 260; int h = 210;
+        super.init();
+        this.uiWidgets.clear();
+
+        int w = 260; int h = 230;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // 1. INPUT ID (Sin borde default, fondo custom en render)
+        // ID Box
         idBox = new EditBox(font, x + 30, y + 46, 140, 16, Component.translatable("gui.serialcraft.io.label_id"));
         idBox.setValue(this.boardID);
         idBox.setTextColor(TEXT_MAIN);
-        idBox.setBordered(false); // Quitamos el borde negro default
-        addRenderableWidget(idBox);
+        idBox.setBordered(false);
+        addCustomWidget(idBox);
 
-        // Botón Power
-        addRenderableWidget(Button.builder(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"), b -> {
+        // Power
+        addCustomWidget(Button.builder(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"), b -> {
             isSoftOn = !isSoftOn;
             b.setMessage(Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"));
         }).bounds(x + 185, y + 44, 50, 20).build());
 
-        // 2. Botones Config
+        // Fila 1
         int btnY = y + 90;
         int btnW = 70;
         int gap = 5;
@@ -83,93 +98,105 @@ public class IOScreen extends Screen {
             b.setMessage(getModeText());
             logicButton.visible = (ioMode == 1);
         }).bounds(x + 20, btnY, btnW, 20).build();
-        addRenderableWidget(modeButton);
+        addCustomWidget(modeButton);
 
         signalButton = Button.builder(getSignalText(), b -> {
             signalType = (signalType == 0) ? 1 : 0;
             b.setMessage(getSignalText());
         }).bounds(x + 20 + btnW + gap, btnY, btnW, 20).build();
-        addRenderableWidget(signalButton);
+        addCustomWidget(signalButton);
 
         logicButton = Button.builder(getLogicText(), b -> {
             logicMode = (logicMode + 1) % 3;
             b.setMessage(getLogicText());
         }).bounds(x + 20 + (btnW + gap) * 2, btnY, btnW, 20).build();
         logicButton.visible = (ioMode == 1);
-        addRenderableWidget(logicButton);
+        addCustomWidget(logicButton);
 
-        // 3. INPUT DATA
-        dataBox = new EditBox(font, x + 30, y + 141, 200, 16, Component.literal("Data"));
+        // Fila 2: Solo Frecuencia (Centrado)
+        int btnY2 = y + 115;
+        freqButton = Button.builder(getFreqText(), b -> {
+            if (updateFreq == 1) updateFreq = 2;
+            else if (updateFreq == 2) updateFreq = 4;
+            else updateFreq = 1;
+            b.setMessage(getFreqText());
+        }).bounds(x + 80, btnY2, 100, 20).build();
+        addCustomWidget(freqButton);
+
+        // Data Box
+        dataBox = new EditBox(font, x + 30, y + 155, 200, 16, Component.literal("Data"));
         dataBox.setMaxLength(32);
         dataBox.setValue(this.targetData);
         dataBox.setTextColor(TEXT_MAIN);
         dataBox.setBordered(false);
-        addRenderableWidget(dataBox);
+        addCustomWidget(dataBox);
 
-        // 4. Guardar
-        addRenderableWidget(Button.builder(Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket())
-                .bounds(x + 80, y + 180, 100, 20).build());
+        // Guardar
+        addCustomWidget(Button.builder(Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket())
+                .bounds(x + 80, y + 195, 100, 20).build());
     }
 
-    private Component getModeText() {
-        return (ioMode == 0) ? Component.translatable("gui.serialcraft.mode.out") : Component.translatable("gui.serialcraft.mode.in");
+    // CORRECCIÓN TÉCNICA
+    private <T extends GuiEventListener & Renderable & NarratableEntry> void addCustomWidget(T widget) {
+        this.addRenderableWidget(widget);
+        this.uiWidgets.add(widget);
     }
-    private Component getSignalText() {
-        return (signalType == 0) ? Component.translatable("gui.serialcraft.signal.digital") : Component.translatable("gui.serialcraft.signal.analog");
-    }
+
+    private Component getModeText() { return (ioMode == 0) ? Component.translatable("gui.serialcraft.mode.out") : Component.translatable("gui.serialcraft.mode.in"); }
+    private Component getSignalText() { return (signalType == 0) ? Component.translatable("gui.serialcraft.signal.digital") : Component.translatable("gui.serialcraft.signal.analog"); }
+
     private Component getLogicText() {
-        switch(logicMode) {
-            case 0: return Component.translatable("gui.serialcraft.logic.or");
-            case 1: return Component.translatable("gui.serialcraft.logic.and");
-            case 2: return Component.translatable("gui.serialcraft.logic.xor");
-            default: return Component.literal("OR");
-        }
+        return switch(logicMode) {
+            case 0 -> Component.translatable("gui.serialcraft.logic.or");
+            case 1 -> Component.translatable("gui.serialcraft.logic.and");
+            default -> Component.translatable("gui.serialcraft.logic.xor");
+        };
+    }
+
+    private Component getFreqText() {
+        return switch (updateFreq) {
+            case 1 -> Component.translatable("gui.serialcraft.freq.fast");
+            case 2 -> Component.translatable("gui.serialcraft.freq.normal");
+            default -> Component.translatable("gui.serialcraft.freq.slow");
+        };
     }
 
     private void sendPacket() {
         ClientPlayNetworking.send(new ConfigPayload(
-                pos, ioMode, dataBox.getValue(), signalType, isSoftOn, idBox.getValue(), 10, logicMode
+                pos, ioMode, dataBox.getValue(), signalType, isSoftOn, idBox.getValue(),
+                updateFreq, logicMode
         ));
         this.onClose();
     }
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
-        this.renderTransparentBackground(gui);
-        int w = 260; int h = 210;
+        int w = 260; int h = 230;
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
         gui.fill(x, y, x + w, y + h, BG_COLOR);
         drawBorder(gui, x, y, w, h, BORDER_COLOR);
 
-        // Cabecera
         gui.fill(x, y, x + w, y + 30, CARD_COLOR);
-        gui.drawCenteredString(font, this.title, this.width / 2, y + 10, TEXT_MAIN);
+        // TEXTO SIN SOMBRA (false)
+        gui.drawString(font, this.title, x + (w/2) - (font.width(this.title)/2), y + 10, TEXT_MAIN, false);
 
-        // DIBUJAR CAJAS BLANCAS DETRÁS DE LOS INPUTS
-        // Caja ID
         drawBorder(gui, x + 25, y + 42, 150, 24, BORDER_COLOR);
         gui.fill(x + 26, y + 43, x + 25 + 149, y + 42 + 23, INPUT_BG);
+        // Label sin sombra
         gui.drawString(font, Component.translatable("gui.serialcraft.io.label_id"), x + 25, y + 32, TEXT_DIM, false);
 
-        // Separador Modo
         gui.drawCenteredString(font, Component.translatable("gui.serialcraft.io.section_mode"), this.width / 2, y + 75, ACCENT_COLOR);
 
-        // Caja Data
-        drawBorder(gui, x + 25, y + 137, 210, 24, BORDER_COLOR);
-        gui.fill(x + 26, y + 138, x + 25 + 209, y + 137 + 23, INPUT_BG);
-        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_command"), x + 25, y + 125, TEXT_DIM, false);
+        drawBorder(gui, x + 25, y + 151, 210, 24, BORDER_COLOR);
+        gui.fill(x + 26, y + 152, x + 25 + 209, y + 151 + 23, INPUT_BG);
+        // Label sin sombra
+        gui.drawString(font, Component.translatable("gui.serialcraft.io.label_command"), x + 25, y + 140, TEXT_DIM, false);
 
-        // Ayuda
-        String cmd = dataBox.getValue().isEmpty() ? "[CMD]" : dataBox.getValue();
-        String helpKey = (ioMode == 0)
-                ? ((signalType == 0) ? "gui.serialcraft.help.out_dig" : "gui.serialcraft.help.out_pwm")
-                : ((signalType == 0) ? "gui.serialcraft.help.in_dig" : "gui.serialcraft.help.in_pwm");
-
-        gui.drawCenteredString(font, Component.translatable(helpKey, cmd), this.width/2, y + 165, 0xFF888888);
-
-        super.render(gui, mouseX, mouseY, partialTick);
+        for (Renderable widget : this.uiWidgets) {
+            widget.render(gui, mouseX, mouseY, partialTick);
+        }
     }
 
     private void drawBorder(GuiGraphics gui, int x, int y, int width, int height, int color) {

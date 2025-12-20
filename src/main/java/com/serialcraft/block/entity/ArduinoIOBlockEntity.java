@@ -1,6 +1,5 @@
 package com.serialcraft.block.entity;
 
-import com.serialcraft.SerialCraft;
 import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.IOSide;
 import com.serialcraft.network.SerialOutputPayload;
@@ -26,12 +25,10 @@ import java.util.UUID;
 
 public class ArduinoIOBlockEntity extends BlockEntity {
 
-    public static final int MODE_OUTPUT = 0; // MC -> Ard
-    public static final int MODE_INPUT = 1;  // Ard -> MC
-
+    public static final int MODE_OUTPUT = 0;
+    public static final int MODE_INPUT = 1;
     public static final int SIGNAL_DIGITAL = 0;
     public static final int SIGNAL_ANALOG = 1;
-
     public static final int LOGIC_OR = 0;
     public static final int LOGIC_AND = 1;
     public static final int LOGIC_XOR = 2;
@@ -41,16 +38,16 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public String targetData = "cmd_1";
     public boolean isSoftOn = true;
     public String boardID = "placa_gen";
-    public int pulseDuration = 10;
     public int logicMode = LOGIC_OR;
+
+    // Frecuencia INDIVIDUAL de esta placa
+    public int updateFrequency = 2;
 
     public UUID ownerUUID = null;
 
     private int currentRedstoneOutput = 0;
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
-
-    // OPTIMIZACIÓN: Rate Limiting
     private long lastUpdateTick = 0;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
@@ -61,6 +58,13 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
+
+        // Rate Limiting Individual
+        long gameTime = level.getGameTime();
+        if (gameTime - lastUpdateTick < updateFrequency) {
+            return;
+        }
+        lastUpdateTick = gameTime;
 
         if (!isSoftOn || !isLogicMet) {
             if (currentRedstoneOutput != 0) {
@@ -93,7 +97,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         if(level == null) return;
         BlockState state = getBlockState();
 
-        // En modo SALIDA, siempre está activo, no hay condiciones
         if (this.ioMode == MODE_OUTPUT) {
             this.isLogicMet = true;
             return;
@@ -125,8 +128,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     private void handleOutputLogic() {
         assert level != null;
-
-        // Lógica de pines IN como fuente de datos
         int maxPower = 0;
         boolean hasInputPins = false;
         BlockState state = getBlockState();
@@ -141,17 +142,14 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
         if (!hasInputPins) maxPower = 0;
 
-        // Feedback Visual
         if (this.currentRedstoneOutput != maxPower) {
             this.currentRedstoneOutput = maxPower;
             level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
         }
 
-        // Envío Serial
         if (maxPower == this.cachedRedstoneInput) return;
         this.cachedRedstoneInput = maxPower;
 
-        // OPTIMIZACIÓN: STRING BUILDER (Menos basura en memoria)
         StringBuilder sb = new StringBuilder();
         sb.append(this.targetData).append(':');
 
@@ -202,15 +200,18 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         }
     }
 
-    public void updateConfig(int mode, String data, int signal, boolean softOn, String bId, int duration, int logic) {
+    // --- CONFIG UPDATE CORREGIDO (Solo Hz, sin BaudRate) ---
+    public void updateConfig(int mode, String data, int signal, boolean softOn, String bId, int frequency, int logic) {
         this.ioMode = mode;
         this.targetData = (data == null) ? "" : data;
         this.signalType = signal;
         this.isSoftOn = softOn;
         this.boardID = (bId == null || bId.isEmpty()) ? "placa_gen" : bId;
-        this.pulseDuration = duration;
-        this.logicMode = logic;
 
+        // Actualizamos frecuencia individual
+        this.updateFrequency = Math.max(1, frequency);
+
+        this.logicMode = logic;
         this.cachedRedstoneInput = -1;
         this.currentRedstoneOutput = 0;
 
@@ -231,8 +232,9 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         output.putInt("signalType", signalType);
         output.putBoolean("isSoftOn", isSoftOn);
         output.putString("boardID", boardID);
-        output.putInt("rsOut", currentRedstoneOutput);
+        output.putInt("updateFreq", updateFrequency); // Guardar Hz individual
         output.putInt("logicMode", logicMode);
+        output.putInt("rsOut", currentRedstoneOutput);
         if (this.ownerUUID != null) output.putString("OwnerUUID", this.ownerUUID.toString());
     }
 
@@ -244,8 +246,9 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.signalType = input.getIntOr("signalType", 0);
         this.isSoftOn = input.getBooleanOr("isSoftOn", true);
         this.boardID = input.getString("boardID").orElse("placa_gen");
-        this.currentRedstoneOutput = input.getIntOr("rsOut", 0);
+        this.updateFrequency = input.getIntOr("updateFreq", 2); // Cargar Hz individual
         this.logicMode = input.getIntOr("logicMode", LOGIC_OR);
+        this.currentRedstoneOutput = input.getIntOr("rsOut", 0);
         input.getString("OwnerUUID").ifPresent(uuidStr -> {
             try { this.ownerUUID = UUID.fromString(uuidStr); } catch (Exception ignored) { }
         });
@@ -259,6 +262,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         tag.putInt("signalType", signalType);
         tag.putBoolean("isSoftOn", isSoftOn);
         tag.putString("boardID", boardID);
+        tag.putInt("updateFreq", updateFrequency); // Importante para que el cliente lo sepa al abrir GUI
         tag.putInt("logicMode", logicMode);
         return tag;
     }
@@ -269,8 +273,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     }
 
     public void onPlayerInteract(Player player) {
-        assert level != null;
-        if(level.isClientSide()) return;
+        if (level == null || level.isClientSide()) return;
         Component status = isSoftOn ? Component.translatable("message.serialcraft.on") : Component.translatable("message.serialcraft.off");
         player.displayClientMessage(Component.translatable("message.serialcraft.io_status", this.boardID, status), true);
     }

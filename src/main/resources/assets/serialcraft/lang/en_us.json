@@ -1,4 +1,9 @@
 {
+  "block.serialcraft.connector_block": "Central Control Laptop",
+  "item.serialcraft.connector_block": "Central Control Laptop",
+  "block.serialcraft.io_block": "Arduino IO Board",
+  "item.serialcraft.io_block": "Arduino IO Board",
+
   "gui.serialcraft.io.title": "⚙ IO CONFIG",
   "gui.serialcraft.io.label_id": "BOARD ID",
   "gui.serialcraft.io.label_command": "SERIAL COMMAND / CHANNEL",
@@ -15,6 +20,13 @@
   "gui.serialcraft.logic.and": "🔗 AND",
   "gui.serialcraft.logic.xor": "🔂 XOR",
 
+  "gui.serialcraft.baud.arduino": "Global: Arduino (9600)",
+  "gui.serialcraft.baud.esp32": "Global: ESP32 (115200)",
+
+  "gui.serialcraft.freq.fast": "Speed: 20Hz (Fast)",
+  "gui.serialcraft.freq.normal": "Speed: 10Hz (Normal)",
+  "gui.serialcraft.freq.slow": "Speed: 5Hz (Slow)",
+
   "gui.serialcraft.help.out_dig": "Send: %s:1 (ON) / :0 (OFF)",
   "gui.serialcraft.help.out_pwm": "Send: %s:[0-255] (PWM)",
   "gui.serialcraft.help.in_dig": "Recv: %s:[1/0]",
@@ -28,11 +40,20 @@
 
   "message.serialcraft.on_icon": "⚡ ON",
   "message.serialcraft.off_icon": "⭕ OFF",
+  "message.serialcraft.on": "ACTIVE",
+  "message.serialcraft.off": "INACTIVE",
+
   "message.serialcraft.connected": "§aConnected to %s",
   "message.serialcraft.disconnected": "§cDisconnected",
-  "message.serialcraft.port_not_found": "§cPort not found",
+  "message.serialcraft.already_connected": "§eAlready connected",
+  "message.serialcraft.no_ports": "§cNo serial ports found",
+  "message.serialcraft.port_not_found": "§cPort %s not found",
+  "message.serialcraft.error": "§cError: %s",
+
   "message.serialcraft.io_input": "Port: INPUT (Read)",
   "message.serialcraft.io_output": "Port: OUTPUT (Emit)",
   "message.serialcraft.io_disconnected": "Port Disconnected",
-  "message.serialcraft.not_owner": "§cError: Board locked by owner."
+  "message.serialcraft.not_owner": "§cError: Board locked by owner.",
+  "message.serialcraft.linked": "Owner registered: %s",
+  "message.serialcraft.io_status": "Board ID: %s | State: %s"
 }
