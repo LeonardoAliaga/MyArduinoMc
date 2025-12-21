@@ -142,16 +142,14 @@ public class ArduinoIOBlock extends BaseEntityBlock {
 
                 String uniqueName = "Board_" + pos.getX() + "_" + pos.getY() + "_" + pos.getZ();
 
-                // === ACTUALIZADO: Adaptado a la Entity que generamos antes ===
-                // Eliminado baudRate de aquí (va en el conector)
-                // Se pasa ioEntity.updateFrequency (Hz)
+                // === ACTUALIZADO: Sin updateFreq ===
                 ioEntity.updateConfig(
                         ioEntity.ioMode,
                         ioEntity.targetData,
                         ioEntity.signalType,
                         ioEntity.isSoftOn,
                         uniqueName,
-                        ioEntity.updateFrequency, // Pasamos la frecuencia (Hz)
+                        // Frecuencia eliminada aquí
                         ioEntity.logicMode
                 );
 

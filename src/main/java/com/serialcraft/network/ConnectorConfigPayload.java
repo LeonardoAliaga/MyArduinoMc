@@ -8,8 +8,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
 
-// AGREGADO: 'boolean connected' al record
-public record ConnectorConfigPayload(BlockPos pos, int baudRate, boolean connected) implements CustomPacketPayload {
+// Actualizado con 'speedMode'
+public record ConnectorConfigPayload(BlockPos pos, int baudRate, boolean connected, int speedMode) implements CustomPacketPayload {
 
     public static final Type<ConnectorConfigPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "connector_config"));
 
@@ -17,12 +17,14 @@ public record ConnectorConfigPayload(BlockPos pos, int baudRate, boolean connect
             (b, v) -> {
                 BlockPos.STREAM_CODEC.encode(b, v.pos);
                 b.writeInt(v.baudRate);
-                b.writeBoolean(v.connected); // Nuevo campo
+                b.writeBoolean(v.connected);
+                b.writeInt(v.speedMode); // Nuevo
             },
             b -> new ConnectorConfigPayload(
                     BlockPos.STREAM_CODEC.decode(b),
                     b.readInt(),
-                    b.readBoolean() // Nuevo campo
+                    b.readBoolean(),
+                    b.readInt() // Nuevo
             )
     );
 

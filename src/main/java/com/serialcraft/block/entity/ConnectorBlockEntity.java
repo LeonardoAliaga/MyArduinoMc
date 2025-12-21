@@ -12,7 +12,6 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.level.Level; // Importante
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -24,13 +23,15 @@ public class ConnectorBlockEntity extends BlockEntity implements MenuProvider {
 
     public int baudRate = 9600;
     public boolean isConnected = false;
+    public int speedMode = 2; // Default FAST
 
     public ConnectorBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.CONNECTOR_BLOCK_ENTITY, pos, state);
     }
 
-    public void updateSettings(int newBaud) {
+    public void updateSettings(int newBaud, int newSpeed) {
         this.baudRate = newBaud;
+        this.speedMode = newSpeed;
         setChanged();
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
@@ -38,9 +39,9 @@ public class ConnectorBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     public void setConnectionState(boolean connected) {
-        // Actualizamos variable interna y forzamos actualización de bloque si cambia
         if (this.isConnected != connected) {
             this.isConnected = connected;
+            setChanged();
             if (level != null) {
                 BlockState state = getBlockState();
                 if (state.hasProperty(ConnectorBlock.LIT)) {
@@ -50,25 +51,28 @@ public class ConnectorBlockEntity extends BlockEntity implements MenuProvider {
         }
     }
 
-    // --- PERSISTENCIA (ValueInput / ValueOutput) ---
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putInt("baudRate", baudRate);
+        output.putInt("speedMode", speedMode);
+        // NO GUARDAMOS isConnected: Al reiniciar el mundo, debe empezar apagado.
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         this.baudRate = input.getIntOr("baudRate", 9600);
+        this.speedMode = input.getIntOr("speedMode", 2);
+        this.isConnected = false; // Siempre desconectado al cargar
     }
 
-    // --- RED ---
     @Override
     public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         tag.putInt("baudRate", baudRate);
         tag.putBoolean("isConnected", isConnected);
+        tag.putInt("speedMode", speedMode);
         return tag;
     }
 
@@ -78,7 +82,6 @@ public class ConnectorBlockEntity extends BlockEntity implements MenuProvider {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    // --- MENÚ ---
     @Override
     public Component getDisplayName() {
         return Component.translatable("block.serialcraft.connector_block");
@@ -87,17 +90,6 @@ public class ConnectorBlockEntity extends BlockEntity implements MenuProvider {
     @Nullable
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
-        return null; // O tu MenuHandler aquí
-    }
-
-    // --- MÉTODO AGREGADO PARA EL TICKER ---
-    public static void tick(Level level, BlockPos pos, BlockState state, ConnectorBlockEntity entity) {
-        if (level.isClientSide()) return;
-
-        // Sincronización visual simple: si la propiedad LIT no coincide con isConnected, actualizamos
-        boolean visualLit = state.getValue(ConnectorBlock.LIT);
-        if (visualLit != entity.isConnected) {
-            level.setBlock(pos, state.setValue(ConnectorBlock.LIT, entity.isConnected), 3);
-        }
+        return null;
     }
 }

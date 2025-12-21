@@ -34,7 +34,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public static final int LOGIC_AND = 1;
     public static final int LOGIC_XOR = 2;
 
-    // Variables de estado
+    // Variables de configuración
     public int ioMode = MODE_OUTPUT;
     public int signalType = SIGNAL_DIGITAL;
     public String targetData = "cmd_1";
@@ -42,23 +42,13 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public String boardID = "placa_gen";
     public int logicMode = LOGIC_OR;
 
-    /**
-     * Frecuencia de actualización.
-     * Si es 1, usamos el modo DIRECTO (sin esperas).
-     * Si es > 1, usamos el modo LIMITADO (ahorro de recursos).
-     */
-    public int updateFrequency = 1;
-
     public UUID ownerUUID = null;
 
-    // Lógica interna
+    // Variables internas
     private int currentRedstoneOutput = 0;
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
-
-    // Control de tiempo (Solo para modos lentos o salida)
     private long lastUpdateTick = 0;
-    private int pendingSlowInput = -1;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
@@ -66,11 +56,10 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public void setOwner(UUID uuid) { this.ownerUUID = uuid; setChanged(); }
 
-    // --- CICLO DEL SERVIDOR (Tick) ---
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
-        // 1. Seguridad: Si está apagado lógicamente, cortar energía
+        // Seguridad: Si está apagado lógicamente, cortar energía
         if (!isSoftOn || !isLogicMet) {
             if (currentRedstoneOutput != 0) {
                 currentRedstoneOutput = 0;
@@ -79,26 +68,12 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             return;
         }
 
-        // 2. MODO SALIDA (Minecraft -> Arduino)
-        // Aquí SÍ respetamos la frecuencia siempre para no saturar el Serial.
+        // MODO SALIDA (MC -> Arduino): Limitamos a 1 vez por tick
         if (this.ioMode == MODE_OUTPUT) {
             long gameTime = level.getGameTime();
-            if (gameTime - lastUpdateTick >= updateFrequency) {
+            if (gameTime - lastUpdateTick >= 1) {
                 lastUpdateTick = gameTime;
                 handleOutputLogic();
-            }
-        }
-
-        // 3. MODO ENTRADA LENTO (Solo si updateFrequency > 1)
-        // Si el usuario eligió 5Hz o 10Hz, aplicamos el valor pendiente aquí.
-        else if (this.ioMode == MODE_INPUT && updateFrequency > 1) {
-            long gameTime = level.getGameTime();
-            if (gameTime - lastUpdateTick >= updateFrequency) {
-                lastUpdateTick = gameTime;
-                if (pendingSlowInput != -1) {
-                    forceRedstoneUpdate(pendingSlowInput);
-                    pendingSlowInput = -1;
-                }
             }
         }
     }
@@ -187,10 +162,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         sendSerialToClient(sb.toString());
     }
 
-    /**
-     * MODO ENTRADA (Arduino -> Minecraft)
-     * Aquí ocurre la magia de la respuesta instantánea.
-     */
+    // MODO ENTRADA (Arduino -> MC)
     public void processSerialInput(String message) {
         if (!isSoftOn || !isLogicMet || this.ioMode != MODE_INPUT) return;
 
@@ -204,58 +176,31 @@ public class ArduinoIOBlockEntity extends BlockEntity {
                     newRedstone = (value > 0) ? 15 : 0;
                 }
 
-                // --- LÓGICA DIRECTA ---
-                if (updateFrequency <= 1) {
-                    // Si está en modo RÁPIDO (default), aplicamos INMEDIATAMENTE.
-                    // No esperamos al tick, no usamos colas. Directo al mundo.
-                    forceRedstoneUpdate(newRedstone);
-                } else {
-                    // Si el usuario pidió modo LENTO (5Hz), guardamos para el tickServer.
-                    this.pendingSlowInput = newRedstone;
+                if (this.currentRedstoneOutput != newRedstone) {
+                    this.currentRedstoneOutput = newRedstone;
+                    setChanged();
+                    if (level != null) {
+                        level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
+                    }
                 }
             }
         } catch (Exception ignored) {}
     }
 
-    // Método auxiliar para aplicar cambios al mundo real
-    private void forceRedstoneUpdate(int newValue) {
-        if (this.currentRedstoneOutput != newValue) {
-            this.currentRedstoneOutput = newValue;
-
-            // Notificamos a Minecraft que este bloque cambió y debe actualizar vecinos (Redstone Wire, Lámparas)
-            setChanged();
-            if (level != null) {
-                level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
-            }
-        }
-    }
-
+    // --- EL MÉTODO QUE FALTABA ---
     public int getRedstoneSignal() {
         return (isSoftOn) ? this.currentRedstoneOutput : 0;
     }
 
-    private void sendSerialToClient(String msg) {
-        if (ownerUUID != null) {
-            assert level != null;
-            Player p = level.getPlayerByUUID(ownerUUID);
-            if (p instanceof ServerPlayer sp) {
-                ServerPlayNetworking.send(sp, new SerialOutputPayload(msg));
-            }
-        }
-    }
-
     // --- CONFIG UPDATE ---
-    public void updateConfig(int mode, String data, int signal, boolean softOn, String bId, int frequency, int logic) {
+    public void updateConfig(int mode, String data, int signal, boolean softOn, String bId, int logic) {
         this.ioMode = mode;
         this.targetData = (data == null) ? "" : data;
         this.signalType = signal;
         this.isSoftOn = softOn;
         this.boardID = (bId == null || bId.isEmpty()) ? "placa_gen" : bId;
-
-        // Frecuencia mínima 1
-        this.updateFrequency = Math.max(1, frequency);
-
         this.logicMode = logic;
+
         this.cachedRedstoneInput = -1;
         this.lastUpdateTick = 0;
 
@@ -268,7 +213,16 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
     }
 
-    // Métodos de guardado estándar
+    private void sendSerialToClient(String msg) {
+        if (ownerUUID != null) {
+            assert level != null;
+            Player p = level.getPlayerByUUID(ownerUUID);
+            if (p instanceof ServerPlayer sp) {
+                ServerPlayNetworking.send(sp, new SerialOutputPayload(msg));
+            }
+        }
+    }
+
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
@@ -277,7 +231,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         output.putInt("signalType", signalType);
         output.putBoolean("isSoftOn", isSoftOn);
         output.putString("boardID", boardID);
-        output.putInt("updateFreq", updateFrequency);
         output.putInt("logicMode", logicMode);
         output.putInt("rsOut", currentRedstoneOutput);
         if (this.ownerUUID != null) output.putString("OwnerUUID", this.ownerUUID.toString());
@@ -291,7 +244,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.signalType = input.getIntOr("signalType", 0);
         this.isSoftOn = input.getBooleanOr("isSoftOn", true);
         this.boardID = input.getString("boardID").orElse("placa_gen");
-        this.updateFrequency = input.getIntOr("updateFreq", 1);
         this.logicMode = input.getIntOr("logicMode", LOGIC_OR);
         this.currentRedstoneOutput = input.getIntOr("rsOut", 0);
 
@@ -308,7 +260,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         tag.putInt("signalType", signalType);
         tag.putBoolean("isSoftOn", isSoftOn);
         tag.putString("boardID", boardID);
-        tag.putInt("updateFreq", updateFrequency);
         tag.putInt("logicMode", logicMode);
         return tag;
     }

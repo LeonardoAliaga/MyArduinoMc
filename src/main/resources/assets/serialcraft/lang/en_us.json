@@ -20,12 +20,13 @@
   "gui.serialcraft.logic.and": "🔗 AND",
   "gui.serialcraft.logic.xor": "🔂 XOR",
 
-  "gui.serialcraft.baud.arduino": "Global: Arduino (9600)",
-  "gui.serialcraft.baud.esp32": "Global: ESP32 (115200)",
+  "gui.serialcraft.profile.arduino": "Arduino UNO",
+  "gui.serialcraft.profile.esp32": "ESP32 / Node",
+  "gui.serialcraft.profile.custom": "Custom",
 
-  "gui.serialcraft.freq.fast": "Speed: 20Hz (Fast)",
-  "gui.serialcraft.freq.normal": "Speed: 10Hz (Normal)",
-  "gui.serialcraft.freq.slow": "Speed: 5Hz (Slow)",
+  "gui.serialcraft.speed.low": "Low",
+  "gui.serialcraft.speed.norm": "Norm",
+  "gui.serialcraft.speed.fast": "Fast",
 
   "gui.serialcraft.help.out_dig": "Send: %s:1 (ON) / :0 (OFF)",
   "gui.serialcraft.help.out_pwm": "Send: %s:[0-255] (PWM)",

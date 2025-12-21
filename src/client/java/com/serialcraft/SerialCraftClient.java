@@ -26,22 +26,23 @@ public class SerialCraftClient implements ClientModInitializer {
 
     public static SerialPort arduinoPort = null;
 
-    // VARIABLES PARA MULTITHREADING
+    // --- CONFIGURACIÓN GLOBAL DE VELOCIDAD ---
+    // 0 = LOW (5Hz), 1 = NORMAL (20Hz), 2 = FAST (Sin Límite/Bypass)
+    public static int globalSerialSpeed = 2;
+
     private static Thread serialThread;
     private static volatile boolean running = false;
 
     @Override
     public void onInitializeClient() {
-
         HudRenderCallback.EVENT.register(new SerialDebugHud());
 
-        // Evento: Desconexión automática al salir del mundo
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             desconectar();
             SerialDebugHud.addLog("Desconectado por salida del mundo.");
         });
 
-        // HANDLER: Salida Serial (MC -> Arduino)
+        // HANDLER: MC -> Arduino (Salida)
         ClientPlayNetworking.registerGlobalReceiver(SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 String msg = payload.message();
@@ -104,8 +105,7 @@ public class SerialCraftClient implements ClientModInitializer {
 
         try {
             SerialPort[] ports = SerialPort.getCommPorts();
-            if (ports.length == 0)
-                return Component.translatable("message.serialcraft.no_ports");
+            if (ports.length == 0) return Component.translatable("message.serialcraft.no_ports");
 
             for (SerialPort p : ports) {
                 if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
@@ -113,8 +113,8 @@ public class SerialCraftClient implements ClientModInitializer {
                     arduinoPort.setBaudRate(baudRate);
 
                     if (arduinoPort.openPort()) {
-                        // Usamos TIMEOUT_READ_SEMI_BLOCKING para lectura más ágil
-                        arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
+                        // Lectura semi-bloqueante rápida
+                        arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 50, 0);
 
                         running = true;
                         serialThread = new Thread(SerialCraftClient::serialLoop, "SerialCraft-Reader");
@@ -143,10 +143,13 @@ public class SerialCraftClient implements ClientModInitializer {
         } catch (InterruptedException e) {}
     }
 
-    // --- HILO DEDICADO DE LECTURA (MODO INSTANTÁNEO) ---
+    // --- HILO DE LECTURA OPTIMIZADO (THROTTLING) ---
     private static void serialLoop() {
         StringBuilder localBuffer = new StringBuilder();
         byte[] readBuffer = new byte[1024];
+
+        long lastDispatchTime = 0;
+        String pendingMessage = null;
 
         while (running && arduinoPort != null && arduinoPort.isOpen()) {
             try {
@@ -162,25 +165,48 @@ public class SerialCraftClient implements ClientModInitializer {
                         localBuffer.delete(0, newlineIndex + 1);
 
                         if (!fullMessage.isEmpty()) {
-
-                            // 1. LOG VISUAL INMEDIATO
-                            // Se ejecuta en el hilo serial. NO espera al tick de Minecraft.
-                            // Esto soluciona que el Debug se vea "por lotes".
-                            SerialDebugHud.addLog("RX: " + fullMessage);
-
-                            // 2. ENVÍO A LA RED
-                            // Usamos execute para thread-safety, pero enviamos cada paquete individualmente.
-                            Minecraft.getInstance().execute(() -> {
-                                ClientPlayNetworking.send(new SerialInputPayload(fullMessage));
-                            });
+                            // SI ES FAST (2): Enviar directo (Bypass de ticks)
+                            if (globalSerialSpeed == 2) {
+                                dispatchMessage(fullMessage);
+                            } else {
+                                // SI ES LOW/NORMAL: Guardar solo el último (Sampling)
+                                pendingMessage = fullMessage;
+                            }
                         }
                     }
                 }
+
+                // GESTIÓN DE ENVÍO LENTO (Para modos 0 y 1)
+                if (globalSerialSpeed != 2 && pendingMessage != null) {
+                    long now = System.currentTimeMillis();
+                    // LOW = 200ms (5Hz), NORMAL = 50ms (20Hz)
+                    int delay = (globalSerialSpeed == 0) ? 200 : 50;
+
+                    if (now - lastDispatchTime >= delay) {
+                        dispatchMessage(pendingMessage);
+                        pendingMessage = null;
+                        lastDispatchTime = now;
+                    }
+                }
+
+                // Pequeña pausa para no quemar CPU
+                try { Thread.sleep(2); } catch (InterruptedException e) { break; }
+
             } catch (Exception e) {
                 e.printStackTrace();
                 desconectar();
             }
         }
+    }
+
+    private static void dispatchMessage(String msg) {
+        // 1. HUD: Se actualiza en tiempo real
+        SerialDebugHud.addLog("RX: " + msg);
+
+        // 2. Red: Se envía al servidor
+        Minecraft.getInstance().execute(() -> {
+            ClientPlayNetworking.send(new SerialInputPayload(msg));
+        });
     }
 
     public static void enviarArduinoLocal(String msg) {

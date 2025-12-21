@@ -15,7 +15,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -50,14 +49,7 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
         return new ConnectorBlockEntity(pos, state);
     }
 
-    @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Ahora sí funcionará porque agregaremos el método tick a ConnectorBlockEntity
-        if (type == ModBlockEntities.CONNECTOR_BLOCK_ENTITY) {
-            return (lvl, pos, st, be) -> ConnectorBlockEntity.tick(lvl, pos, st, (ConnectorBlockEntity) be);
-        }
-        return null;
-    }
+    // Ticker Eliminado: No es necesario, la actualización es por Evento de Red directo.
 
     @Override
     public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
@@ -90,7 +82,7 @@ public class ConnectorBlock extends HorizontalDirectionalBlock implements Entity
         if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ConnectorBlockEntity connector) {
-                // CORREGIDO: Se elimina 'pos' como argumento
+                // Abre el menú, pero la pantalla real es gestionada por el cliente.
                 serverPlayer.openMenu(connector);
             }
         }
