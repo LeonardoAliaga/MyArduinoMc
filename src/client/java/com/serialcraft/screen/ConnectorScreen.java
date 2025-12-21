@@ -6,7 +6,6 @@ import com.serialcraft.block.entity.ConnectorBlockEntity;
 import com.serialcraft.network.BoardInfo;
 import com.serialcraft.network.BoardListRequestPayload;
 import com.serialcraft.network.ConnectorConfigPayload;
-import com.serialcraft.network.ConnectorPayload;
 import com.serialcraft.network.RemoteTogglePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphics;
@@ -27,14 +26,13 @@ public class ConnectorScreen extends Screen {
     private Component statusText;
     private boolean isConnected;
 
-    // Solo BaudRate aquí
     private int baudRate = 9600;
 
     private List<BoardInfo> boardList = new ArrayList<>();
     private final List<Renderable> uiWidgets = new ArrayList<>();
     private final List<SolidButton> boardButtons = new ArrayList<>();
 
-    // Colores
+    // Colores (Tus colores originales conservados)
     private static final int BG_COLOR = 0xFFF2F2EC;
     private static final int HEADER_BG = 0xFFE6E6DF;
     private static final int CARD_BG = 0xFFFFFFFF;
@@ -64,7 +62,8 @@ public class ConnectorScreen extends Screen {
 
         this.isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
 
-        ClientPlayNetworking.send(new ConnectorPayload(this.pos, isConnected));
+        // Enviamos estado inicial
+        ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate, isConnected));
         ClientPlayNetworking.send(new BoardListRequestPayload(true));
 
         int w = 340; int h = 230;
@@ -73,53 +72,67 @@ public class ConnectorScreen extends Screen {
 
         String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM9";
 
-        // Port Box (más alto para legibilidad)
-        this.portBox = new EditBox(this.font, x + 35, y + 48, 110, 18, Component.translatable("gui.serialcraft.connector.port_label"));
+        // --- FILA 1: PUERTO y BAUD RATE ---
+
+        // 1. Port Box (Izquierda) - x+35, y+45
+        this.portBox = new EditBox(this.font, x + 35, y + 45, 120, 18, Component.translatable("gui.serialcraft.connector.port_label"));
         this.portBox.setMaxLength(32);
         this.portBox.setValue(isConnected ? SerialCraftClient.arduinoPort.getSystemPortName() : oldPort);
         this.portBox.setTextColor(TEXT_MAIN);
         this.portBox.setBordered(false);
         this.addCustomWidget(this.portBox);
 
-        if (isConnected) {
-            this.statusText = Component.translatable("message.serialcraft.connected", SerialCraftClient.arduinoPort.getSystemPortName());
-        } else {
-            this.statusText = Component.translatable("message.serialcraft.disconnected");
-        }
+        // 2. Baud Rate Config (Derecha, al lado del puerto) - x+170, y+44
+        this.addCustomWidget(SolidButton.primary(x + 170, y + 44, 135, 20,
+                getBaudText(), b -> {
+                    this.baudRate = (this.baudRate == 9600) ? 115200 : 9600;
+                    b.setMessage(getBaudText());
+                    // Actualizamos config sin cambiar estado de conexión
+                    ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate, isConnected));
+                }));
 
-        // Conectar
-        this.addCustomWidget(SolidButton.success(x + 240, y + 45, 70, 20,
+        // Texto de estado inicial
+        updateStatusText();
+
+        // --- FILA 2: BOTONES DE ACCIÓN (Centrados) ---
+
+        // 3. Conectar (Botón Grande) - x+85, y+74
+        this.addCustomWidget(SolidButton.success(x + 85, y + 74, 130, 20,
                 Component.translatable("gui.serialcraft.connector.btn_connect"), b -> {
                     Component res = SerialCraftClient.conectar(portBox.getValue().trim(), this.baudRate);
                     this.statusText = res;
                     this.isConnected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
-                    if (isConnected) ClientPlayNetworking.send(new ConnectorPayload(this.pos, true));
+
+                    // IMPORTANTE: Enviamos 'true' en el payload para encender la laptop
+                    if (isConnected) {
+                        ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate, true));
+                    }
                 }));
 
-        // Desconectar
-        this.addCustomWidget(SolidButton.danger(x + 315, y + 45, 20, 20,
+        // 4. Desconectar (Botón Pequeño "X") - x+225, y+74
+        this.addCustomWidget(SolidButton.danger(x + 225, y + 74, 20, 20,
                 Component.literal("X"), b -> {
                     SerialCraftClient.desconectar();
-                    this.statusText = Component.translatable("message.serialcraft.disconnected");
                     this.isConnected = false;
-                    ClientPlayNetworking.send(new ConnectorPayload(this.pos, false));
-                }));
+                    updateStatusText();
 
-        // CONFIG BAUD RATE (Centrado)
-        int configY = y + 75;
-        this.addCustomWidget(SolidButton.primary(x + 100, configY, 140, 20,
-                getBaudText(), b -> {
-                    this.baudRate = (this.baudRate == 9600) ? 115200 : 9600;
-                    b.setMessage(getBaudText());
-                    ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate));
+                    // IMPORTANTE: Enviamos 'false' para apagar la laptop
+                    ClientPlayNetworking.send(new ConnectorConfigPayload(this.pos, this.baudRate, false));
                 }));
 
         refreshBoardListWidgets();
     }
 
-    // CORRECCIÓN TÉCNICA: Usar la intersección de tipos requerida por Minecraft
+    private void updateStatusText() {
+        if (isConnected && SerialCraftClient.arduinoPort != null) {
+            this.statusText = Component.translatable("message.serialcraft.connected", SerialCraftClient.arduinoPort.getSystemPortName());
+        } else {
+            this.statusText = Component.translatable("message.serialcraft.disconnected");
+        }
+    }
+
     private <T extends GuiEventListener & Renderable & NarratableEntry> void addCustomWidget(T widget) {
-        this.addRenderableWidget(widget); // Ahora sí acepta el widget sin quejas
+        this.addRenderableWidget(widget);
         this.uiWidgets.add(widget);
     }
 
@@ -173,22 +186,28 @@ public class ConnectorScreen extends Screen {
         gui.fill(x, y, x + w, y + h, BG_COLOR);
         drawBorder(gui, x, y, w, h, 0xFFAAAAAA);
 
+        // Header
         gui.fill(x, y, x + w, y + 30, HEADER_BG);
-        // TEXTO SIN SOMBRA (false)
         gui.drawString(this.font, this.title, x + (w/2) - (this.font.width(this.title)/2), y + 10, TEXT_MAIN, false);
 
-        // Input port (más alto)
-        drawBorder(gui, x + 30, y + 43, 120, 26, 0xFFAAAAAA);
-        gui.fill(x + 31, y + 44, x + 30 + 119, y + 43 + 25, INPUT_BG);
+        // --- DIBUJO DE CAJAS E INPUTS (Fila 1) ---
+        // Caja blanca para el puerto (x30, y40)
+        drawBorder(gui, x + 30, y + 40, 130, 26, 0xFFAAAAAA);
+        gui.fill(x + 31, y + 41, x + 30 + 129, y + 40 + 25, INPUT_BG);
 
-        // Labels sin sombra
-        gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.port_label"), x + 30, y + 33, TEXT_DIM, false);
+        // Labels
+        gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.port_label"), x + 30, y + 31, TEXT_DIM, false);
+        gui.drawString(this.font, "Baud Rate", x + 170, y + 31, TEXT_DIM, false);
 
+        // --- ESTADO (Debajo de los botones, centrado) ---
+        // Y = 98 (aprox)
         int statusColor = isConnected ? ACCENT_GREEN : ACCENT_RED;
-        gui.drawString(this.font, statusText, x + 150, y + 50, statusColor, false);
+        int statusWidth = this.font.width(statusText);
+        gui.drawString(this.font, statusText, x + (w/2) - (statusWidth/2), y + 98, statusColor, false);
 
-        gui.fill(x + 20, y + 105, x + w - 20, y + 106, 0xFFCCCCCC);
-        gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.boards_header"), x + 30, y + 110, TEXT_DIM, false);
+        // --- SEPARADOR LISTA ---
+        gui.fill(x + 20, y + 110, x + w - 20, y + 111, 0xFFCCCCCC);
+        gui.drawString(this.font, Component.translatable("gui.serialcraft.connector.boards_header"), x + 30, y + 115, TEXT_DIM, false);
 
         int listStartY = y + 125;
 

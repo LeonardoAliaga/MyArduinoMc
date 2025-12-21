@@ -20,6 +20,8 @@ public class ModNetworking {
         PayloadTypeRegistry.playC2S().register(SerialInputPayload.TYPE, SerialInputPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoardListRequestPayload.TYPE, BoardListRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RemoteTogglePayload.TYPE, RemoteTogglePayload.CODEC);
+
+        // El payload actualizado (pos, baudRate, connected)
         PayloadTypeRegistry.playC2S().register(ConnectorConfigPayload.TYPE, ConnectorConfigPayload.CODEC);
 
         PayloadTypeRegistry.playS2C().register(SerialOutputPayload.TYPE, SerialOutputPayload.CODEC);
@@ -29,17 +31,20 @@ public class ModNetworking {
     public static void registerServerHandlers() {
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> SerialCraft.activeIOBlocks.clear());
 
-        // 1. CONFIG GLOBAL (Laptop) -> Solo BaudRate
+        // 1. CONFIGURACIÓN DEL CONECTOR (Laptop)
+        // Ahora maneja tanto la velocidad como el encendido visual.
         ServerPlayNetworking.registerGlobalReceiver(ConnectorConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos()) instanceof ConnectorBlockEntity connector) {
-                    connector.baudRate = payload.baudRate();
-                    connector.setChanged();
+                    // Actualiza la variable baudRate
+                    connector.updateSettings(payload.baudRate());
+                    // Actualiza el estado visual (ON/OFF) y la variable isConnected
+                    connector.setConnectionState(payload.connected());
                 }
             });
         });
 
-        // 2. CONFIG INDIVIDUAL (Placas IO) -> Hz Individual
+        // 2. CONFIG INDIVIDUAL (Placas IO)
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.pos()) instanceof ArduinoIOBlockEntity entity) {
@@ -50,7 +55,7 @@ public class ModNetworking {
                                 payload.signalType(),
                                 payload.isSoftOn(),
                                 payload.boardID(),
-                                payload.updateFreq(), // Hz
+                                payload.updateFreq(),
                                 payload.logicMode()
                         );
                     }
@@ -58,18 +63,19 @@ public class ModNetworking {
             });
         });
 
-        // Connector Handler (Encender/Apagar pantalla)
+        // Handler antiguo para encender/apagar (se mantiene por compatibilidad si se usa ConnectorPayload en otro lado)
         ServerPlayNetworking.registerGlobalReceiver(ConnectorPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 var level = context.player().level();
                 var state = level.getBlockState(payload.pos());
                 if (state.is(ModBlocks.CONNECTOR_BLOCK)) {
+                    // Solo actualiza el bloque visualmente, sin pasar por el BlockEntity (método directo)
                     level.setBlock(payload.pos(), state.setValue(ConnectorBlock.LIT, payload.connected()), 3);
                 }
             });
         });
 
-        // Serial Input
+        // Serial Input (Datos del Arduino al Juego)
         ServerPlayNetworking.registerGlobalReceiver(SerialInputPayload.TYPE, (payload, context) -> {
             ServerPlayer sender = context.player();
             context.server().execute(() -> {
@@ -84,7 +90,7 @@ public class ModNetworking {
             });
         });
 
-        // Lista de placas
+        // Solicitud de Lista de placas
         ServerPlayNetworking.registerGlobalReceiver(BoardListRequestPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
             context.server().execute(() -> {
@@ -100,7 +106,7 @@ public class ModNetworking {
             });
         });
 
-        // Toggle Remoto
+        // Toggle Remoto (Botón ON/OFF en la interfaz del conector)
         ServerPlayNetworking.registerGlobalReceiver(RemoteTogglePayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 if (context.player().level().getBlockEntity(payload.targetPos()) instanceof ArduinoIOBlockEntity io) {

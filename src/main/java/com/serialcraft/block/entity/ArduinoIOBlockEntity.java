@@ -43,20 +43,22 @@ public class ArduinoIOBlockEntity extends BlockEntity {
     public int logicMode = LOGIC_OR;
 
     /**
-     * Intervalo de actualización individual (en ticks).
-     *
-     * 1 tick = 20 Hz, 2 ticks = 10 Hz, 4 ticks = 5 Hz.
+     * Frecuencia de actualización.
+     * Si es 1, usamos el modo DIRECTO (sin esperas).
+     * Si es > 1, usamos el modo LIMITADO (ahorro de recursos).
      */
     public int updateFrequency = 1;
 
     public UUID ownerUUID = null;
 
-    // Variables internas de lógica
+    // Lógica interna
     private int currentRedstoneOutput = 0;
     private int cachedRedstoneInput = -1;
     private boolean isLogicMet = true;
+
+    // Control de tiempo (Solo para modos lentos o salida)
     private long lastUpdateTick = 0;
-    private long lastInputTick = 0;
+    private int pendingSlowInput = -1;
 
     public ArduinoIOBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.IO_BLOCK_ENTITY, pos, state);
@@ -64,10 +66,11 @@ public class ArduinoIOBlockEntity extends BlockEntity {
 
     public void setOwner(UUID uuid) { this.ownerUUID = uuid; setChanged(); }
 
+    // --- CICLO DEL SERVIDOR (Tick) ---
     public void tickServer() {
         if (this.level == null || this.level.isClientSide()) return;
 
-        // Estado OFF/condiciones lógicas: forzar salida 0 sin rate limiting
+        // 1. Seguridad: Si está apagado lógicamente, cortar energía
         if (!isSoftOn || !isLogicMet) {
             if (currentRedstoneOutput != 0) {
                 currentRedstoneOutput = 0;
@@ -76,14 +79,28 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             return;
         }
 
-        if (this.ioMode != MODE_OUTPUT) return;
+        // 2. MODO SALIDA (Minecraft -> Arduino)
+        // Aquí SÍ respetamos la frecuencia siempre para no saturar el Serial.
+        if (this.ioMode == MODE_OUTPUT) {
+            long gameTime = level.getGameTime();
+            if (gameTime - lastUpdateTick >= updateFrequency) {
+                lastUpdateTick = gameTime;
+                handleOutputLogic();
+            }
+        }
 
-        // Rate Limiting Individual basado en updateFrequency
-        long gameTime = level.getGameTime();
-        if (gameTime - lastUpdateTick < updateFrequency) return;
-        lastUpdateTick = gameTime;
-
-        handleOutputLogic();
+        // 3. MODO ENTRADA LENTO (Solo si updateFrequency > 1)
+        // Si el usuario eligió 5Hz o 10Hz, aplicamos el valor pendiente aquí.
+        else if (this.ioMode == MODE_INPUT && updateFrequency > 1) {
+            long gameTime = level.getGameTime();
+            if (gameTime - lastUpdateTick >= updateFrequency) {
+                lastUpdateTick = gameTime;
+                if (pendingSlowInput != -1) {
+                    forceRedstoneUpdate(pendingSlowInput);
+                    pendingSlowInput = -1;
+                }
+            }
+        }
     }
 
     private void updateVisualState() {
@@ -154,7 +171,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
         }
 
-        // Evitar enviar spam si el valor no ha cambiado
         if (maxPower == this.cachedRedstoneInput) return;
         this.cachedRedstoneInput = maxPower;
 
@@ -164,7 +180,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         if (this.signalType == SIGNAL_DIGITAL) {
             sb.append(maxPower > 0 ? '1' : '0');
         } else {
-            // Mapeo de 0-15 a 0-255
             int pwm = Math.round((maxPower * 255.0f) / 15.0f);
             sb.append(pwm);
         }
@@ -172,34 +187,47 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         sendSerialToClient(sb.toString());
     }
 
+    /**
+     * MODO ENTRADA (Arduino -> Minecraft)
+     * Aquí ocurre la magia de la respuesta instantánea.
+     */
     public void processSerialInput(String message) {
         if (!isSoftOn || !isLogicMet || this.ioMode != MODE_INPUT) return;
-
-        // Aplicar el intervalo también a INPUT ("velocidad de lectura")
-        if (level != null) {
-            long gameTime = level.getGameTime();
-            if (gameTime - lastInputTick < updateFrequency) return;
-            lastInputTick = gameTime;
-        }
 
         try {
             if (message.startsWith(this.targetData + ":")) {
                 String valueStr = message.split(":")[1];
                 int value = Integer.parseInt(valueStr);
-                int newRedstone = Math.max(0, Math.min(15, value));
 
+                int newRedstone = Math.max(0, Math.min(15, value));
                 if (this.signalType == SIGNAL_DIGITAL) {
                     newRedstone = (value > 0) ? 15 : 0;
                 }
 
-                if (this.currentRedstoneOutput != newRedstone) {
-                    this.currentRedstoneOutput = newRedstone;
-                    setChanged();
-                    assert level != null;
-                    level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
+                // --- LÓGICA DIRECTA ---
+                if (updateFrequency <= 1) {
+                    // Si está en modo RÁPIDO (default), aplicamos INMEDIATAMENTE.
+                    // No esperamos al tick, no usamos colas. Directo al mundo.
+                    forceRedstoneUpdate(newRedstone);
+                } else {
+                    // Si el usuario pidió modo LENTO (5Hz), guardamos para el tickServer.
+                    this.pendingSlowInput = newRedstone;
                 }
             }
         } catch (Exception ignored) {}
+    }
+
+    // Método auxiliar para aplicar cambios al mundo real
+    private void forceRedstoneUpdate(int newValue) {
+        if (this.currentRedstoneOutput != newValue) {
+            this.currentRedstoneOutput = newValue;
+
+            // Notificamos a Minecraft que este bloque cambió y debe actualizar vecinos (Redstone Wire, Lámparas)
+            setChanged();
+            if (level != null) {
+                level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
+            }
+        }
     }
 
     public int getRedstoneSignal() {
@@ -224,29 +252,23 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         this.isSoftOn = softOn;
         this.boardID = (bId == null || bId.isEmpty()) ? "placa_gen" : bId;
 
-        // Actualizamos intervalo (ticks)
+        // Frecuencia mínima 1
         this.updateFrequency = Math.max(1, frequency);
 
         this.logicMode = logic;
         this.cachedRedstoneInput = -1;
-        this.currentRedstoneOutput = 0;
         this.lastUpdateTick = 0;
-        this.lastInputTick = 0;
 
         updateLogicConditions();
         updateVisualState();
 
         setChanged();
         assert level != null;
-        // Notificamos al cliente para que actualice datos
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
     }
 
-    // ==========================================
-    // MÉTODOS DE GUARDADO (USANDO ValueOutput/Input)
-    // ==========================================
-
+    // Métodos de guardado estándar
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
@@ -258,9 +280,7 @@ public class ArduinoIOBlockEntity extends BlockEntity {
         output.putInt("updateFreq", updateFrequency);
         output.putInt("logicMode", logicMode);
         output.putInt("rsOut", currentRedstoneOutput);
-        if (this.ownerUUID != null) {
-            output.putString("OwnerUUID", this.ownerUUID.toString());
-        }
+        if (this.ownerUUID != null) output.putString("OwnerUUID", this.ownerUUID.toString());
     }
 
     @Override
@@ -279,10 +299,6 @@ public class ArduinoIOBlockEntity extends BlockEntity {
             try { this.ownerUUID = UUID.fromString(uuidStr); } catch (Exception ignored) { }
         });
     }
-
-    // ==========================================
-    // SINCRONIZACIÓN CLIENTE (Solo aquí se usa CompoundTag porque Minecraft lo obliga en el return)
-    // ==========================================
 
     @Override
     public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider provider) {

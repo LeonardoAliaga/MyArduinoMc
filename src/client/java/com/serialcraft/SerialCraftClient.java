@@ -98,7 +98,6 @@ public class SerialCraftClient implements ClientModInitializer {
         });
     }
 
-    // --- MÉTODO ACTUALIZADO PARA RECIBIR BAUDRATE ---
     public static Component conectar(String puerto, int baudRate) {
         if (arduinoPort != null && arduinoPort.isOpen())
             return Component.translatable("message.serialcraft.already_connected");
@@ -111,14 +110,12 @@ public class SerialCraftClient implements ClientModInitializer {
             for (SerialPort p : ports) {
                 if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
                     arduinoPort = p;
-                    // AQUI SE APLICA EL CAMBIO
                     arduinoPort.setBaudRate(baudRate);
 
                     if (arduinoPort.openPort()) {
-                        // Configuración para lectura eficiente
-                        arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 1000, 0);
+                        // Usamos TIMEOUT_READ_SEMI_BLOCKING para lectura más ágil
+                        arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 100, 0);
 
-                        // INICIAR HILO DE LECTURA
                         running = true;
                         serialThread = new Thread(SerialCraftClient::serialLoop, "SerialCraft-Reader");
                         serialThread.start();
@@ -134,7 +131,7 @@ public class SerialCraftClient implements ClientModInitializer {
     }
 
     public static void desconectar() {
-        running = false; // Detener el bucle del hilo
+        running = false;
         if (arduinoPort != null) {
             arduinoPort.closePort();
             arduinoPort = null;
@@ -146,7 +143,7 @@ public class SerialCraftClient implements ClientModInitializer {
         } catch (InterruptedException e) {}
     }
 
-    // --- HILO DEDICADO DE LECTURA ---
+    // --- HILO DEDICADO DE LECTURA (MODO INSTANTÁNEO) ---
     private static void serialLoop() {
         StringBuilder localBuffer = new StringBuilder();
         byte[] readBuffer = new byte[1024];
@@ -165,8 +162,15 @@ public class SerialCraftClient implements ClientModInitializer {
                         localBuffer.delete(0, newlineIndex + 1);
 
                         if (!fullMessage.isEmpty()) {
+
+                            // 1. LOG VISUAL INMEDIATO
+                            // Se ejecuta en el hilo serial. NO espera al tick de Minecraft.
+                            // Esto soluciona que el Debug se vea "por lotes".
+                            SerialDebugHud.addLog("RX: " + fullMessage);
+
+                            // 2. ENVÍO A LA RED
+                            // Usamos execute para thread-safety, pero enviamos cada paquete individualmente.
                             Minecraft.getInstance().execute(() -> {
-                                SerialDebugHud.addLog("RX: " + fullMessage);
                                 ClientPlayNetworking.send(new SerialInputPayload(fullMessage));
                             });
                         }
