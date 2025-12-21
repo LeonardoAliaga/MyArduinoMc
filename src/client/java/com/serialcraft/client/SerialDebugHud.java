@@ -3,12 +3,11 @@ package com.serialcraft.client;
 import com.serialcraft.SerialCraftClient;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.DeltaTracker; // Import Correcto para 1.21+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -18,7 +17,7 @@ import java.util.List;
 public class SerialDebugHud implements HudRenderCallback {
 
     // Configuración
-    public static boolean isDebugEnabled = true;
+    public static boolean isDebugEnabled = false; // Toggle con F7
     private static final List<String> eventLog = new ArrayList<>();
     private static final int MAX_LOGS = 8;
 
@@ -32,6 +31,7 @@ public class SerialDebugHud implements HudRenderCallback {
         }
     }
 
+    // Firma correcta para Minecraft 1.21+
     @Override
     public void onHudRender(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (!isDebugEnabled) return;
@@ -43,12 +43,27 @@ public class SerialDebugHud implements HudRenderCallback {
         int x = 5;
         int y = 5;
 
-        // --- 1. LOG DE RED (Esquina Superior Izquierda) ---
-        boolean connected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
-        String portInfo = connected ? " (" + SerialCraftClient.arduinoPort.getSystemPortName() + ")" : " (No Conectado)";
-        int portColor = connected ? 0xFF55FF55 : 0xFFFF5555;
+        // --- 1. CABECERA Y LOGS ---
 
-        guiGraphics.drawString(font, "§6[SerialCraft DEBUG]§r" + portInfo, x, y, portColor, true);
+        // Info de Conexión
+        boolean connected = (SerialCraftClient.arduinoPort != null && SerialCraftClient.arduinoPort.isOpen());
+        String portInfo = connected ? SerialCraftClient.arduinoPort.getSystemPortName() : "No Conectado";
+        int baud = connected ? SerialCraftClient.arduinoPort.getBaudRate() : 0;
+
+        String speedLabel = switch (SerialCraftClient.globalSerialSpeed) {
+            case 0 -> "LOW";
+            case 1 -> "NORM";
+            default -> "FAST";
+        };
+
+        String header = String.format("§6[SerialCraft]§r %s | Baud:%d | Spd:%s", portInfo, baud, speedLabel);
+        int headerColor = connected ? 0xFF55FF55 : 0xFFFF5555;
+
+        // Fondo para logs
+        int logHeight = (eventLog.size() * 10) + 20;
+        guiGraphics.fill(x - 2, y - 2, x + 220, y + logHeight, 0x90000000);
+
+        guiGraphics.drawString(font, header, x, y, headerColor, true);
         y += 12;
 
         synchronized (eventLog) {
@@ -59,7 +74,7 @@ public class SerialDebugHud implements HudRenderCallback {
             }
         }
 
-        // --- 2. INFO DEL BLOQUE (Raycast) ---
+        // --- 2. INFO DEL BLOQUE (RAYCAST) - CONSERVADO ---
         HitResult hit = mc.hitResult;
         if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
             BlockHitResult blockHit = (BlockHitResult) hit;
@@ -72,6 +87,7 @@ public class SerialDebugHud implements HudRenderCallback {
                 int cx = (screenWidth / 2) + 15;
                 int cy = (screenHeight / 2) - 15;
 
+                // Fondo tooltip
                 guiGraphics.fill(cx - 5, cy - 5, cx + 130, cy + 90, 0x90000000);
 
                 int textY = cy;
@@ -89,7 +105,7 @@ public class SerialDebugHud implements HudRenderCallback {
                 guiGraphics.drawString(font, modeStr, cx, textY, modeColor, true);
                 textY += 10;
 
-                // SEÑAL (Corrección: Usamos 1 directamente en lugar de SIGNAL_ANALOG)
+                // SEÑAL
                 boolean isAnalog = (io.signalType == 1); // 1 = Analog
                 String signalStr = isAnalog ? "ANALOG (PWM)" : "DIGITAL (I/O)";
                 guiGraphics.drawString(font, signalStr, cx, textY, isAnalog ? 0xFFFF55FF : 0xFF55FF55, true);
@@ -101,12 +117,12 @@ public class SerialDebugHud implements HudRenderCallback {
                 textY += 10;
 
                 // ESTADO
-                guiGraphics.drawString(font, "Soft Power: ", cx, textY, labelCol, true);
+                guiGraphics.drawString(font, "Soft: ", cx, textY, labelCol, true);
                 guiGraphics.drawString(font, io.isSoftOn ? "ON" : "OFF", cx + 60, textY, io.isSoftOn ? 0xFF55FF55 : 0xFFFF5555, true);
                 textY += 10;
 
                 // REDSTONE
-                guiGraphics.drawString(font, "Redstone: ", cx, textY, labelCol, true);
+                guiGraphics.drawString(font, "RS: ", cx, textY, labelCol, true);
                 int rsVal = io.getRedstoneSignal();
                 guiGraphics.drawString(font, String.valueOf(rsVal), cx + 55, textY, (rsVal > 0) ? 0xFFFF5555 : 0xFFAAAAAA, true);
             }

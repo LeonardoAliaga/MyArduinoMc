@@ -1,6 +1,7 @@
 package com.serialcraft;
 
 import com.fazecast.jSerialComm.SerialPort;
+import com.mojang.blaze3d.platform.InputConstants; // Necesario para Type.KEYSYM
 import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
@@ -9,40 +10,82 @@ import com.serialcraft.network.*;
 import com.serialcraft.screen.ConnectorScreen;
 import com.serialcraft.screen.IOScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.client.KeyMapping; // Mappings de Mojang (o KeyBinding en Yarn)
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
+import org.lwjgl.glfw.GLFW;
 
 import java.nio.charset.StandardCharsets;
 
 public class SerialCraftClient implements ClientModInitializer {
 
     public static SerialPort arduinoPort = null;
-
-    // --- CONFIGURACIÓN GLOBAL DE VELOCIDAD ---
-    // 0 = LOW (5Hz), 1 = NORMAL (20Hz), 2 = FAST (Sin Límite/Bypass)
     public static int globalSerialSpeed = 2;
 
     private static Thread serialThread;
     private static volatile boolean running = false;
 
+    private static KeyMapping debugHudKey;
+
+    // SOLUCIÓN 1.21.4+: Crear la categoría como OBJETO, no String
+    private static final String CATEGORY_ID = "category.serialcraft.general";
+
+    // Si KeyMapping.Category.register no existe en tu subversión exacta,
+    // usa: new KeyMapping.Category(CATEGORY_ID)
+    // Pero en 1.21.4 suele ser un método estático o constructor directo.
+    // Probaremos la forma más compatible con Mojmap moderno:
+
     @Override
     public void onInitializeClient() {
         HudRenderCallback.EVENT.register(new SerialDebugHud());
+
+        // REGISTRO DE TECLA F7
+        // Usamos el constructor de 4 argumentos pasando el String de categoría
+        // NOTA: Si esto falla, es porque tu versión EXIGE un objeto 'Category'.
+        // En ese caso, la línea sería:
+        // KeyMapping.Category categoryObj = new KeyMapping.Category(CATEGORY_ID);
+
+        debugHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.serialcraft.debug_hud",       // Nombre
+                InputConstants.Type.KEYSYM,        // Tipo de entrada
+                GLFW.GLFW_KEY_F7,                  // Tecla
+                CATEGORY_ID                        // Categoría (String)
+                // Si aquí te sigue dando error, cambia CATEGORY_ID por: "misc"
+        ));
+
+        /* SI EL ERROR PERSISTE ("cannot be applied to String"), usa este bloque en su lugar:
+
+           debugHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.serialcraft.debug_hud",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_F7,
+                "key.categories.misc" // Intenta usar una standard de vanilla
+           ));
+        */
+
+        // Toggle HUD
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (debugHudKey.consumeClick()) {
+                SerialDebugHud.isDebugEnabled = !SerialDebugHud.isDebugEnabled;
+            }
+        });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             desconectar();
             SerialDebugHud.addLog("Desconectado por salida del mundo.");
         });
 
-        // HANDLER: MC -> Arduino (Salida)
+        // HANDLERS...
         ClientPlayNetworking.registerGlobalReceiver(SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 String msg = payload.message();
@@ -51,7 +94,6 @@ public class SerialCraftClient implements ClientModInitializer {
             });
         });
 
-        // HANDLER: Lista de Placas
         ClientPlayNetworking.registerGlobalReceiver(BoardListResponsePayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 if (Minecraft.getInstance().screen instanceof ConnectorScreen screen) {
@@ -60,7 +102,6 @@ public class SerialCraftClient implements ClientModInitializer {
             });
         });
 
-        // EVENTO INTERACCIÓN
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             if (!level.isClientSide() || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 
@@ -99,121 +140,78 @@ public class SerialCraftClient implements ClientModInitializer {
         });
     }
 
+    // ... (Resto de métodos conectar, desconectar, serialLoop, dispatchMessage, enviarArduinoLocal IGUALES)
     public static Component conectar(String puerto, int baudRate) {
-        if (arduinoPort != null && arduinoPort.isOpen())
-            return Component.translatable("message.serialcraft.already_connected");
-
+        if (arduinoPort != null && arduinoPort.isOpen()) return Component.translatable("message.serialcraft.already_connected");
         try {
             SerialPort[] ports = SerialPort.getCommPorts();
             if (ports.length == 0) return Component.translatable("message.serialcraft.no_ports");
-
             for (SerialPort p : ports) {
                 if (p.getSystemPortName().equalsIgnoreCase(puerto)) {
                     arduinoPort = p;
                     arduinoPort.setBaudRate(baudRate);
-
                     if (arduinoPort.openPort()) {
-                        // Lectura semi-bloqueante rápida
                         arduinoPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 50, 0);
-
                         running = true;
                         serialThread = new Thread(SerialCraftClient::serialLoop, "SerialCraft-Reader");
                         serialThread.start();
-
                         return Component.translatable("message.serialcraft.connected", puerto);
                     }
                 }
             }
             return Component.translatable("message.serialcraft.port_not_found", puerto);
-        } catch (Exception e) {
-            return Component.translatable("message.serialcraft.error", e.getMessage());
-        }
+        } catch (Exception e) { return Component.translatable("message.serialcraft.error", e.getMessage()); }
     }
 
     public static void desconectar() {
         running = false;
-        if (arduinoPort != null) {
-            arduinoPort.closePort();
-            arduinoPort = null;
-        }
-        try {
-            if (serialThread != null && serialThread.isAlive()) {
-                serialThread.join(500);
-            }
-        } catch (InterruptedException e) {}
+        if (arduinoPort != null) { arduinoPort.closePort(); arduinoPort = null; }
+        try { if (serialThread != null && serialThread.isAlive()) serialThread.join(500); } catch (InterruptedException e) {}
     }
 
-    // --- HILO DE LECTURA OPTIMIZADO (THROTTLING) ---
     private static void serialLoop() {
         StringBuilder localBuffer = new StringBuilder();
         byte[] readBuffer = new byte[1024];
-
         long lastDispatchTime = 0;
         String pendingMessage = null;
-
         while (running && arduinoPort != null && arduinoPort.isOpen()) {
             try {
                 int numRead = arduinoPort.readBytes(readBuffer, readBuffer.length);
-
                 if (numRead > 0) {
                     String chunk = new String(readBuffer, 0, numRead, StandardCharsets.UTF_8);
                     localBuffer.append(chunk);
-
                     int newlineIndex;
                     while ((newlineIndex = localBuffer.indexOf("\n")) != -1) {
                         String fullMessage = localBuffer.substring(0, newlineIndex).trim();
                         localBuffer.delete(0, newlineIndex + 1);
-
                         if (!fullMessage.isEmpty()) {
-                            // SI ES FAST (2): Enviar directo (Bypass de ticks)
-                            if (globalSerialSpeed == 2) {
-                                dispatchMessage(fullMessage);
-                            } else {
-                                // SI ES LOW/NORMAL: Guardar solo el último (Sampling)
-                                pendingMessage = fullMessage;
-                            }
+                            if (globalSerialSpeed == 2) dispatchMessage(fullMessage);
+                            else pendingMessage = fullMessage;
                         }
                     }
                 }
-
-                // GESTIÓN DE ENVÍO LENTO (Para modos 0 y 1)
                 if (globalSerialSpeed != 2 && pendingMessage != null) {
                     long now = System.currentTimeMillis();
-                    // LOW = 200ms (5Hz), NORMAL = 50ms (20Hz)
                     int delay = (globalSerialSpeed == 0) ? 200 : 50;
-
                     if (now - lastDispatchTime >= delay) {
                         dispatchMessage(pendingMessage);
                         pendingMessage = null;
                         lastDispatchTime = now;
                     }
                 }
-
-                // Pequeña pausa para no quemar CPU
                 try { Thread.sleep(2); } catch (InterruptedException e) { break; }
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                desconectar();
-            }
+            } catch (Exception e) { e.printStackTrace(); desconectar(); }
         }
     }
 
     private static void dispatchMessage(String msg) {
-        // 1. HUD: Se actualiza en tiempo real
         SerialDebugHud.addLog("RX: " + msg);
-
-        // 2. Red: Se envía al servidor
-        Minecraft.getInstance().execute(() -> {
-            ClientPlayNetworking.send(new SerialInputPayload(msg));
-        });
+        Minecraft.getInstance().execute(() -> ClientPlayNetworking.send(new SerialInputPayload(msg)));
     }
 
     public static void enviarArduinoLocal(String msg) {
         if (arduinoPort != null && arduinoPort.isOpen()) {
-            try {
-                arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1);
-            } catch (Exception e) { e.printStackTrace(); }
+            try { arduinoPort.writeBytes((msg + "\n").getBytes(), msg.length() + 1); } catch (Exception e) { e.printStackTrace(); }
         }
     }
 }

@@ -18,7 +18,6 @@ import java.util.List;
 
 public class IOScreen extends Screen {
     private final BlockPos pos;
-    // ... Variables ...
     private int ioMode;
     private int signalType;
     private final String targetData;
@@ -32,15 +31,12 @@ public class IOScreen extends Screen {
 
     private final List<Renderable> uiWidgets = new ArrayList<>();
 
-    // Colores
     private static final int BG_COLOR = 0xFFF2F2EC;
     private static final int CARD_COLOR = 0xFFE6E6DF;
     private static final int TEXT_MAIN = 0xFF333333;
     private static final int TEXT_DIM = 0xFF777777;
     private static final int ACCENT_COLOR = 0xFF00838F;
     private static final int BORDER_COLOR = 0xFFAAAAAA;
-
-    // Dark Inputs
     private static final int INPUT_BG = 0xFF1A1A1A;
     private static final int TEXT_INPUT = 0xFFE0E0E0;
 
@@ -74,14 +70,12 @@ public class IOScreen extends Screen {
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
 
-        // ID Box
         idBox = new EditBox(font, x + 30, y + 48, 160, 18, Component.translatable("gui.serialcraft.io.label_id"));
         idBox.setValue(this.boardID);
         idBox.setTextColor(TEXT_INPUT);
         idBox.setBordered(false);
         addCustomWidget(idBox);
 
-        // Power Button
         SolidButton powerBtn = SolidButton.of(
                 x + 200, y + 45, 35, 20,
                 Component.translatable(isSoftOn ? "message.serialcraft.on_icon" : "message.serialcraft.off_icon"),
@@ -94,7 +88,6 @@ public class IOScreen extends Screen {
                 }, isSoftOn ? SolidButton.Variant.SUCCESS : SolidButton.Variant.DANGER);
         addCustomWidget(powerBtn);
 
-        // Botones Config
         int btnY = y + 95;
         int btnW = 70;
         int gap = 5;
@@ -119,7 +112,6 @@ public class IOScreen extends Screen {
         logicButton.visible = (ioMode == 1);
         addCustomWidget(logicButton);
 
-        // Data Box
         dataBox = new EditBox(font, x + 30, y + 157, 200, 18, Component.literal("Data"));
         dataBox.setMaxLength(32);
         dataBox.setValue(this.targetData);
@@ -127,7 +119,6 @@ public class IOScreen extends Screen {
         dataBox.setBordered(false);
         addCustomWidget(dataBox);
 
-        // Guardar
         addCustomWidget(SolidButton.success(x + 80, y + 195, 100, 20,
                 Component.translatable("gui.serialcraft.io.btn_save"), b -> sendPacket()));
     }
@@ -137,7 +128,6 @@ public class IOScreen extends Screen {
         this.uiWidgets.add(widget);
     }
 
-    // ... Getters de texto igual ...
     private Component getModeText() { return (ioMode == 0) ? Component.translatable("gui.serialcraft.mode.out") : Component.translatable("gui.serialcraft.mode.in"); }
     private Component getSignalText() { return (signalType == 0) ? Component.translatable("gui.serialcraft.signal.digital") : Component.translatable("gui.serialcraft.signal.analog"); }
     private Component getLogicText() {
@@ -146,6 +136,17 @@ public class IOScreen extends Screen {
             case 1 -> Component.translatable("gui.serialcraft.logic.and");
             default -> Component.translatable("gui.serialcraft.logic.xor");
         };
+    }
+
+    private Component getHelpText() {
+        String key;
+        if (ioMode == 0) {
+            key = (signalType == 0) ? "gui.serialcraft.help.out_dig" : "gui.serialcraft.help.out_pwm";
+        } else {
+            key = (signalType == 0) ? "gui.serialcraft.help.in_dig" : "gui.serialcraft.help.in_pwm";
+        }
+        String currentCmd = dataBox != null ? dataBox.getValue() : targetData;
+        return Component.translatable(key, currentCmd);
     }
 
     private void sendPacket() {
@@ -162,30 +163,36 @@ public class IOScreen extends Screen {
         int y = (this.height - h) / 2;
 
         gui.fill(x, y, x + w, y + h, BG_COLOR);
-        // Bordes y Headers...
-        gui.fill(x, y, x + width, y + 1, BORDER_COLOR);
-        gui.fill(x, y, x + 1, y + height, BORDER_COLOR);
-        gui.fill(x + width - 1, y, x + width, y + height, BORDER_COLOR);
-        gui.fill(x, y + height - 1, x + width, y + height, BORDER_COLOR);
+        // REEMPLAZO renderOutline por drawBorder
+        drawBorder(gui, x, y, w, h, BORDER_COLOR);
 
         gui.fill(x, y, x + w, y + 30, CARD_COLOR);
         gui.drawString(font, this.title, x + (w/2) - (font.width(this.title)/2), y + 10, TEXT_MAIN, false);
 
-        // Input ID Dark
-        gui.fill(x + 25, y + 42, x + 25 + 170, y + 42 + 26, BORDER_COLOR); // Borde
-        gui.fill(x + 26, y + 43, x + 25 + 169, y + 42 + 25, INPUT_BG); // Relleno
+        gui.fill(x + 25, y + 42, x + 25 + 170, y + 42 + 26, BORDER_COLOR);
+        gui.fill(x + 26, y + 43, x + 25 + 169, y + 42 + 25, INPUT_BG);
         gui.drawString(font, Component.translatable("gui.serialcraft.io.label_id"), x + 25, y + 32, TEXT_DIM, false);
 
         gui.drawCenteredString(font, Component.translatable("gui.serialcraft.io.section_mode"), this.width / 2, y + 75, ACCENT_COLOR);
 
-        // Input Data Dark
         gui.fill(x + 25, y + 151, x + 25 + 210, y + 151 + 26, BORDER_COLOR);
         gui.fill(x + 26, y + 152, x + 25 + 209, y + 151 + 25, INPUT_BG);
         gui.drawString(font, Component.translatable("gui.serialcraft.io.label_command"), x + 25, y + 140, TEXT_DIM, false);
 
+        Component help = getHelpText();
+        gui.drawCenteredString(font, help, this.width / 2, y + 180, 0xFF666666);
+
         for (Renderable widget : this.uiWidgets) {
             widget.render(gui, mouseX, mouseY, partialTick);
         }
+    }
+
+    // MÉTODO AUXILIAR PARA BORDES
+    private void drawBorder(GuiGraphics gui, int x, int y, int w, int h, int color) {
+        gui.fill(x, y, x + w, y + 1, color);
+        gui.fill(x, y + h - 1, x + w, y + h, color);
+        gui.fill(x, y, x + 1, y + h, color);
+        gui.fill(x + w - 1, y, x + w, y + h, color);
     }
 
     @Override public boolean isPauseScreen() { return false; }
