@@ -49,12 +49,6 @@ public class SerialCraftClient implements ClientModInitializer {
     public void onInitializeClient() {
         HudRenderCallback.EVENT.register(new SerialDebugHud());
 
-        // REGISTRO DE TECLA F7
-        // Usamos el constructor de 4 argumentos pasando el String de categoría
-        // NOTA: Si esto falla, es porque tu versión EXIGE un objeto 'Category'.
-        // En ese caso, la línea sería:
-        // KeyMapping.Category categoryObj = new KeyMapping.Category(CATEGORY_ID);
-
         debugHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.serialcraft.debug_hud",       // Nombre
                 InputConstants.Type.KEYSYM,        // Tipo de entrada
@@ -62,16 +56,6 @@ public class SerialCraftClient implements ClientModInitializer {
                 CATEGORY_ID                        // Categoría (String)
                 // Si aquí te sigue dando error, cambia CATEGORY_ID por: "misc"
         ));
-
-        /* SI EL ERROR PERSISTE ("cannot be applied to String"), usa este bloque en su lugar:
-
-           debugHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.serialcraft.debug_hud",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_F7,
-                "key.categories.misc" // Intenta usar una standard de vanilla
-           ));
-        */
 
         // Toggle HUD
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
