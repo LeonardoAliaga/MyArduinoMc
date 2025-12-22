@@ -105,7 +105,7 @@ public class ConnectorScreen extends Screen {
 
         updateStatusText();
 
-        int row3Y = y + 95;
+        int row3Y = y + 100;
 
         this.addCustomWidget(SolidButton.primary(x + 25, row3Y, 100, 20, getProfileText(), b -> {
             if (this.baudRate == 9600) this.baudRate = 115200; else this.baudRate = 9600;

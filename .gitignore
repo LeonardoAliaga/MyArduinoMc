@@ -38,3 +38,16 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+
+# --- Documentation (VitePress & Node.js) ---
+
+# Dependencias (IMPORTANTE: Nunca subir esto)
+node_modules/
+docs/node_modules/
+
+# Archivos de compilación de la página web (Se generan solos)
+docs/.vitepress/dist/
+
+# Caché temporal de VitePress
+docs/.vitepress/cache/
