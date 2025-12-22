@@ -1,7 +1,7 @@
 package com.serialcraft;
 
 import com.fazecast.jSerialComm.SerialPort;
-import com.mojang.blaze3d.platform.InputConstants; // Necesario para Type.KEYSYM
+import com.mojang.blaze3d.platform.InputConstants;
 import com.serialcraft.block.ArduinoIOBlock;
 import com.serialcraft.block.ModBlocks;
 import com.serialcraft.block.entity.ArduinoIOBlockEntity;
@@ -16,10 +16,11 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.client.KeyMapping; // Mappings de Mojang (o KeyBinding en Yarn)
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation; // IMPORTANTE: Necesario para el error
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
@@ -37,29 +38,26 @@ public class SerialCraftClient implements ClientModInitializer {
 
     private static KeyMapping debugHudKey;
 
-    // SOLUCIÓN 1.21.4+: Crear la categoría como OBJETO, no String
-    private static final String CATEGORY_ID = "category.serialcraft.general";
-
-    // Si KeyMapping.Category.register no existe en tu subversión exacta,
-    // usa: new KeyMapping.Category(CATEGORY_ID)
-    // Pero en 1.21.4 suele ser un método estático o constructor directo.
-    // Probaremos la forma más compatible con Mojmap moderno:
+    // CORRECCIÓN: Definimos la categoría como ResourceLocation (formato modid:nombre)
+    // Esto soluciona el error "Required Type: ResourceLocation"
+    private static final ResourceLocation CATEGORY_ID = ResourceLocation.parse("serialcraft:general");
 
     @Override
     public void onInitializeClient() {
         HudRenderCallback.EVENT.register(new SerialDebugHud());
 
+        // Registro de la tecla
         debugHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.serialcraft.debug_hud",       // Nombre
-                InputConstants.Type.KEYSYM,        // Tipo de entrada
-                GLFW.GLFW_KEY_F7,                  // Tecla
-                CATEGORY_ID                        // Categoría (String)
-                // Si aquí te sigue dando error, cambia CATEGORY_ID por: "misc"
+                "key.serialcraft.debug_hud",                // Nombre de la tecla (traducción)
+                InputConstants.Type.KEYSYM,                 // Tipo (Teclado)
+                GLFW.GLFW_KEY_F7,                           // Tecla F7
+                new KeyMapping.Category(CATEGORY_ID)        // SOLUCIÓN: Pasamos el objeto Category con ResourceLocation
         ));
 
-        // Toggle HUD
+        // Lógica para alternar el HUD con la tecla
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (debugHudKey.consumeClick()) {
+                // Asegúrate que esta variable sea la misma que usas en SerialDebugHud para renderizar
                 SerialDebugHud.isDebugEnabled = !SerialDebugHud.isDebugEnabled;
             }
         });
@@ -69,7 +67,7 @@ public class SerialCraftClient implements ClientModInitializer {
             SerialDebugHud.addLog("Desconectado por salida del mundo.");
         });
 
-        // HANDLERS...
+        // --- HANDLERS DE RED ---
         ClientPlayNetworking.registerGlobalReceiver(SerialOutputPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
                 String msg = payload.message();
@@ -86,6 +84,7 @@ public class SerialCraftClient implements ClientModInitializer {
             });
         });
 
+        // --- INTERACCIÓN CON BLOQUES ---
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             if (!level.isClientSide() || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 
@@ -124,7 +123,7 @@ public class SerialCraftClient implements ClientModInitializer {
         });
     }
 
-    // ... (Resto de métodos conectar, desconectar, serialLoop, dispatchMessage, enviarArduinoLocal IGUALES)
+    // --- MÉTODOS SERIAL ---
     public static Component conectar(String puerto, int baudRate) {
         if (arduinoPort != null && arduinoPort.isOpen()) return Component.translatable("message.serialcraft.already_connected");
         try {
@@ -190,7 +189,9 @@ public class SerialCraftClient implements ClientModInitializer {
 
     private static void dispatchMessage(String msg) {
         SerialDebugHud.addLog("RX: " + msg);
-        Minecraft.getInstance().execute(() -> ClientPlayNetworking.send(new SerialInputPayload(msg)));
+        if (Minecraft.getInstance().level != null) {
+            Minecraft.getInstance().execute(() -> ClientPlayNetworking.send(new SerialInputPayload(msg)));
+        }
     }
 
     public static void enviarArduinoLocal(String msg) {

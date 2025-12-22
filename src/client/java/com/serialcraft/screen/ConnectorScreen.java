@@ -76,12 +76,7 @@ public class ConnectorScreen extends Screen {
 
         String oldPort = (this.portBox != null) ? this.portBox.getValue() : "COM9";
 
-        // Botón Toggle HUD
-        this.addCustomWidget(SolidButton.soft(x + w - 45, y + 5, 40, 16,
-                Component.literal(SerialDebugHud.showHud ? "HUD: ON" : "HUD: OFF"), b -> {
-                    SerialDebugHud.showHud = !SerialDebugHud.showHud;
-                    b.setMessage(Component.literal(SerialDebugHud.showHud ? "HUD: ON" : "HUD: OFF"));
-                }));
+        // ELIMINADO: Botón Toggle HUD que estaba aquí
 
         int row1Y = y + 45;
 
