@@ -25,6 +25,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
+import com.serialcraft.screen.PanelUI;
+
 
 import java.nio.charset.StandardCharsets;
 
@@ -93,7 +95,7 @@ public class SerialCraftClient implements ClientModInitializer {
             Minecraft mc = Minecraft.getInstance();
 
             if (state.is(ModBlocks.CONNECTOR_BLOCK)) {
-                mc.setScreen(new ConnectorScreen(pos));
+                mc.setScreen(new PanelUI());
                 return InteractionResult.SUCCESS;
             }
 
