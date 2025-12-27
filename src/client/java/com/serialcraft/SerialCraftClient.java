@@ -20,7 +20,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation; // IMPORTANTE: Necesario para el error
+import net.minecraft.resources.Identifier; // IMPORTANTE: Necesario para el error
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.Vec3;
@@ -42,7 +42,7 @@ public class SerialCraftClient implements ClientModInitializer {
 
     // CORRECCIÓN: Definimos la categoría como ResourceLocation (formato modid:nombre)
     // Esto soluciona el error "Required Type: ResourceLocation"
-    private static final ResourceLocation CATEGORY_ID = ResourceLocation.parse("serialcraft:general");
+    private static final Identifier CATEGORY_ID = Identifier.parse("serialcraft:general");
 
     @Override
     public void onInitializeClient() {

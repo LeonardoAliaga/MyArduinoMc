@@ -12,6 +12,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import me.lucko.fabric.api.permissions.v0.Permissions;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -96,10 +97,13 @@ public class ArduinoIOBlock extends BaseEntityBlock {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof ArduinoIOBlockEntity io)) return InteractionResult.FAIL;
 
-        // --- SISTEMA DE SEGURIDAD (Servidor) ---
-        if (io.ownerUUID != null && !io.ownerUUID.equals(player.getUUID()) && !player.hasPermissions(2)) {
-            player.displayClientMessage(Component.translatable("message.serialcraft.not_owner"), true);
-            return InteractionResult.FAIL;
+        // --- SISTEMA DE SEGURIDAD MEJORADO ---
+        if (io.ownerUUID != null && !io.ownerUUID.equals(player.getUUID())) {
+            boolean esAdmin = Permissions.check(player, "serialcraft.admin.bypass", 2);
+            if (!esAdmin) {
+                player.displayClientMessage(Component.translatable("message.serialcraft.not_owner"), true);
+                return InteractionResult.FAIL;
+            }
         }
 
         Vec3 hitPos = hit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());

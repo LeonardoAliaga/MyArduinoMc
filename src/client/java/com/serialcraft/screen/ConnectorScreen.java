@@ -142,9 +142,9 @@ public class ConnectorScreen extends Screen {
     }
 
     private void refreshWidgets() {
-        this.init(this.minecraft, this.width, this.height);
+        // CORRECCIÓN: En 1.21+ usa 'resize' en lugar de 'init' para recargar la pantalla
+        this.resize(this.minecraft, this.width, this.height);
     }
-
     private void cycleBaudRate() {
         int nextIndex = 0;
         for (int i = 0; i < availableBaudRates.length; i++) {

@@ -5,10 +5,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public record RemoteTogglePayload(BlockPos targetPos) implements CustomPacketPayload {
-    public static final Type<RemoteTogglePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "remote_toggle"));
+    public static final Type<RemoteTogglePayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(SerialCraft.MOD_ID, "remote_toggle"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RemoteTogglePayload> CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, RemoteTogglePayload::targetPos,

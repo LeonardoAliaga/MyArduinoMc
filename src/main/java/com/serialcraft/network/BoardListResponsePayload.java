@@ -5,12 +5,12 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
 public record BoardListResponsePayload(List<BoardInfo> boards) implements CustomPacketPayload {
-    public static final Type<BoardListResponsePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, "board_list_res"));
+    public static final Type<BoardListResponsePayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(SerialCraft.MOD_ID, "board_list_res"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, BoardListResponsePayload> CODEC = StreamCodec.composite(
             BoardInfo.CODEC.apply(ByteBufCodecs.list()), BoardListResponsePayload::boards,

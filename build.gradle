@@ -20,6 +20,9 @@ repositories {
     maven {
         url = "https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1"
     }
+    maven {
+        url = 'https://oss.sonatype.org/content/repositories/snapshots'
+    }
 }
 
 loom {
@@ -50,7 +53,8 @@ dependencies {
     // Librería para comunicación serial (Arduino)
     implementation "com.fazecast:jSerialComm:2.10.4"
     include "com.fazecast:jSerialComm:2.10.4"
-	
+
+    modImplementation include("me.lucko:fabric-permissions-api:0.6.1")
 }
 
 processResources {

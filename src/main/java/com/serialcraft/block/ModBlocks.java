@@ -4,8 +4,9 @@ import com.serialcraft.SerialCraft;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -20,7 +21,7 @@ public class ModBlocks {
 
         ResourceKey<Block> key = ResourceKey.create(
                 Registries.BLOCK,
-                ResourceLocation.fromNamespaceAndPath(SerialCraft.MOD_ID, name)
+                Identifier.fromNamespaceAndPath(SerialCraft.MOD_ID, name)
         );
 
         Block block = blockFactory.apply(settings.setId(key));
